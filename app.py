@@ -3,22 +3,22 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-st.title("Traffic Congestion Simulation")
+st.title("🚗 渋滞シミュレーション")
 
 st.write(
-    "This app simulates whether the last vehicle can pass through a signalized crosswalk during one green light."
+    "最後尾車両が1回の青信号で通過できるかを判定するシミュレーションです。"
 )
 
 # ------------------
-# Parameters
+# パラメータ
 # ------------------
-GREEN = st.slider("Green light time (sec)", 10, 120, 60)
+GREEN = st.slider("青信号時間（秒）", 10, 120, 60)
 YELLOW = 5
-RED = st.slider("Red light time (sec)", 10, 120, 55)
+RED = st.slider("赤信号時間（秒）", 10, 120, 55)
 CYCLE = GREEN + YELLOW + RED
 
-lam = st.slider("Traffic volume λ (vehicles/min)", 1, 40, 25)
-trials = st.slider("Number of trials", 100, 5000, 1000)
+lam = st.slider("交通量 λ（台/分）", 1, 40, 25)
+trials = st.slider("試行回数", 100, 5000, 1000)
 
 vehicle_types = ["car", "bike", "large"]
 vehicle_probs = [0.7, 0.1, 0.2]
@@ -71,15 +71,15 @@ results = [simulate_once() for _ in range(trials)]
 
 df = pd.DataFrame(results, columns=["N", "T", "jam"])
 
-st.subheader("Simulation Results")
+st.subheader("シミュレーション結果")
 
 col1, col2, col3 = st.columns(3)
 
-col1.metric("Average N", round(df["N"].mean(), 2))
-col2.metric("Average T (sec)", round(df["T"].mean(), 2))
-col3.metric("Jam Rate", f"{df['jam'].mean() * 100:.1f}%")
+col1.metric("平均車両数", round(df["N"].mean(), 2))
+col2.metric("平均通過時間（秒）", round(df["T"].mean(), 2))
+col3.metric("渋滞率", f"{df['jam'].mean() * 100:.1f}%")
 
-st.subheader("Relationship between N and T")
+st.subheader("車両数と通過時間の関係")
 
 fig, ax = plt.subplots(figsize=(8, 5))
 
@@ -94,7 +94,7 @@ ax.grid(True)
 
 st.pyplot(fig)
 
-st.subheader("Average T by N")
+st.subheader("車両数ごとの平均通過時間")
 
 mean_by_N = df.groupby("N")["T"].mean()
 
@@ -111,4 +111,6 @@ ax2.grid(True)
 
 st.pyplot(fig2)
 
-st.write("Jam is defined as the case where the last vehicle cannot pass during one green light.")
+st.write(
+    "本シミュレーションでは、最後尾車両が青信号時間内に通過できない場合を渋滞と定義しています。"
+)
