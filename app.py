@@ -5,10 +5,8 @@ import matplotlib.pyplot as plt
 
 st.title("🚗 渋滞シミュレーション")
 
-st.write("曜日・時間帯ごとの交通量と、前方車両数をもとに渋滞を判定します。")
-
 # ------------------
-# 曜日・時間帯の設定
+# 曜日・時間帯
 # ------------------
 st.subheader("曜日・時間帯の設定")
 
@@ -37,37 +35,35 @@ traffic_table = {
 traffic_volume = traffic_table[day_type][time_zone]
 
 # ------------------
-# 需要率と信号設定
+# 信号設定
 # ------------------
-max_capacity = 40
-demand_rate = traffic_volume / max_capacity
+YELLOW = 5
+RED = 40
+L_clearance = YELLOW + RED
+
+MAX_CAPACITY = 60
+demand_rate = traffic_volume / MAX_CAPACITY
 
 if demand_rate >= 1:
     demand_rate = 0.99
 
-YELLOW = 5
-RED = 40
-CLEARANCE = YELLOW + RED
-
 # Webster の近似式
 # C = (1.5L + 5) / (1 - λ)
-# C：サイクル長（秒）
-# L：黄＋赤時間（秒）
-# λ：需要率
-C_sec = (1.5 * CLEARANCE + 5) / (1 - demand_rate)
-GREEN = C_sec - CLEARANCE
+C = (1.5 * L_clearance + 5) / (1 - demand_rate)
+
+GREEN = C - L_clearance
 
 st.subheader("交通量と信号設定")
 
 col1, col2, col3, col4 = st.columns(4)
 
 col1.metric("交通量", f"{traffic_volume} 台/分")
-col2.metric("需要率", round(demand_rate, 2))
-col3.metric("サイクル長 C", f"{round(C_sec, 1)} 秒")
+col2.metric("需要率 λ", round(demand_rate, 2))
+col3.metric("サイクル長 C", f"{round(C, 1)} 秒")
 col4.metric("青信号時間", f"{round(GREEN, 1)} 秒")
 
 # ------------------
-# 前方車両数の設定
+# 車両台数設定
 # ------------------
 st.subheader("前方車両数の設定")
 
@@ -77,7 +73,10 @@ Nl = st.number_input("前にいる大型車の台数", min_value=0, value=10)
 
 N = Nb + Nc + Nl
 
-last_vehicle_jp = st.selectbox("最後尾車両の種類", ["普通車", "二輪車", "大型車"])
+last_vehicle_jp = st.selectbox(
+    "最後尾車両の種類",
+    ["普通車", "二輪車", "大型車"]
+)
 
 vehicle_map = {
     "普通車": "car",
@@ -87,43 +86,42 @@ vehicle_map = {
 
 last_vehicle = vehicle_map[last_vehicle_jp]
 
-trials = st.slider("試行回数", 100, 5000, 1000)
-
 # ------------------
 # 車両パラメータ
 # ------------------
 L = {
-    "car": 4.5,
     "bike": 2.0,
+    "car": 4.5,
     "large": 12.0,
 }
 
 G = {
-    "car": 2.0,
     "bike": 1.5,
+    "car": 2.0,
     "large": 3.0,
 }
 
 A = {
-    "car": 2.0,
     "bike": 2.5,
+    "car": 2.0,
     "large": 1.0,
 }
 
 H = {
-    "car": 1.0,
     "bike": 0.7,
+    "car": 1.0,
     "large": 1.5,
 }
 
 D = 10.0
 t0 = 2.0
 
+trials = st.slider("試行回数", 100, 5000, 1000)
 
 # ------------------
-# シミュレーション
+# 通過時間を計算する関数
 # ------------------
-def simulate_once():
+def calculate_T(Nb, Nc, Nl, last_vehicle, epsilon=0):
     queue_time = (
         Nb * H["bike"]
         + Nc * H["car"]
@@ -140,19 +138,22 @@ def simulate_once():
 
     move_time = np.sqrt(2 * distance / A[last_vehicle])
 
-    epsilon = np.random.uniform(-1, 1)
-
     T = t0 + queue_time + move_time + epsilon
 
-    jam = T > GREEN
+    return T
 
-    return T, jam
+# ------------------
+# シミュレーション
+# ------------------
+results = []
 
-
-results = [simulate_once() for _ in range(trials)]
+for _ in range(trials):
+    epsilon = np.random.uniform(-1, 1)
+    T = calculate_T(Nb, Nc, Nl, last_vehicle, epsilon)
+    jam = C < T
+    results.append([T, jam])
 
 df = pd.DataFrame(results, columns=["T", "jam"])
-df["N"] = N
 
 # ------------------
 # 結果表示
@@ -165,19 +166,43 @@ col_a.metric("前方車両数 N", N)
 col_b.metric("平均通過時間 T", f"{round(df['T'].mean(), 2)} 秒")
 col_c.metric("渋滞率", f"{df['jam'].mean() * 100:.1f}%")
 
+if df["T"].mean() > C:
+    st.error("判定：C < T のため、渋滞が発生しています。")
+else:
+    st.success("判定：C ≥ T のため、渋滞は発生していません。")
+
 # ------------------
-# グラフ
+# Nを変化させたグラフ
 # ------------------
-st.subheader("通過時間の分布")
+st.subheader("車両数 N と通過時間 T の関係")
+
+max_N = max(80, N + 40)
+
+N_values = np.arange(1, max_N + 1)
+T_values = []
+
+total = max(N, 1)
+
+bike_ratio = Nb / total
+car_ratio = Nc / total
+large_ratio = Nl / total
+
+for n in N_values:
+    nb = round(n * bike_ratio)
+    nc = round(n * car_ratio)
+    nl = n - nb - nc
+
+    T_n = calculate_T(nb, nc, nl, last_vehicle, epsilon=0)
+    T_values.append(T_n)
 
 fig, ax = plt.subplots(figsize=(8, 5))
 
-ax.hist(df["T"], bins=30, alpha=0.7)
-ax.axvline(GREEN, linestyle="--", label="Green time threshold")
+ax.plot(N_values, T_values, marker="o", markersize=3, label="Passing time T")
+ax.axhline(C, linestyle="--", label="Cycle length C")
 
-ax.set_xlabel("Passing time T (sec)")
-ax.set_ylabel("Frequency")
-ax.set_title("Distribution of Passing Time T")
+ax.set_xlabel("Number of vehicles N")
+ax.set_ylabel("Passing time T (sec)")
+ax.set_title("Relationship between N and Passing Time T")
 ax.legend()
 ax.grid(True)
 
