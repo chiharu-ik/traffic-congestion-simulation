@@ -27,18 +27,19 @@ time_zone = st.selectbox(
     ]
 )
 
+# 交通量：単位時間に横断歩道を通過する自動車の数（台/分）
 traffic_table = {
     "平日": {
-        "朝(6:00〜11:59)": 25,
-        "昼(12:00〜17:59)": 15,
-        "夜(18:00〜23:59)": 20,
-        "深夜・早朝(24:00〜5:59)": 3,
+        "朝(6:00〜11:59)": 12,
+        "昼(12:00〜17:59)": 8,
+        "夜(18:00〜23:59)": 10,
+        "深夜・早朝(24:00〜5:59)": 2,
     },
     "土日": {
-        "朝(6:00〜11:59)": 10,
-        "昼(12:00〜17:59)": 30,
-        "夜(18:00〜23:59)": 25,
-        "深夜・早朝(24:00〜5:59)": 5,
+        "朝(6:00〜11:59)": 8,
+        "昼(12:00〜17:59)": 15,
+        "夜(18:00〜23:59)": 12,
+        "深夜・早朝(24:00〜5:59)": 3,
     },
 }
 
@@ -51,22 +52,30 @@ traffic_volume = traffic_table[day_type][time_zone]
 YELLOW = 5
 RED = 40
 
+# 黄信号＋赤信号の時間
 L_clearance = YELLOW + RED
 
 # 最大処理交通量
-# 普通車の発車間隔2秒を想定
+# 普通車の発車間隔を約2秒とすると、
+# 60秒 ÷ 2秒 = 30台/分 と考えられる
 MAX_CAPACITY = 30
 
+# 需要率 λ
 demand_rate = traffic_volume / MAX_CAPACITY
 
+# Webster式では λ が1以上になると計算できないため、上限を設定
 if demand_rate >= 1:
     demand_rate = 0.95
 
-# Webster
+# Webster の近似式
+# C = (1.5L + 5) / (1 - λ)
+# C：信号サイクル長（秒）
 C_sec = (1.5 * L_clearance + 5) / (1 - demand_rate)
 
+# 分単位に変換
 C_min = C_sec / 60
 
+# 青信号時間
 GREEN_sec = C_sec - L_clearance
 GREEN_min = GREEN_sec / 60
 
@@ -148,6 +157,7 @@ A = {
 }
 
 # 発車間隔(sec)
+# 二輪車：1秒、普通車：2秒、大型車：3秒
 H = {
     "bike": 1.0,
     "car": 2.0,
@@ -157,7 +167,7 @@ H = {
 # 横断歩道までの距離(m)
 D = 10.0
 
-# 先頭車反応時間(sec)
+# 青信号になってから先頭車が発進するまでの時間(sec)
 t0 = 2.0
 
 trials = st.slider(
@@ -168,25 +178,18 @@ trials = st.slider(
 )
 
 # =====================================================
-# 通過時間計算
+# 通過時間 T の計算
 # =====================================================
 
-def calculate_T_sec(
-    Nb,
-    Nc,
-    Nl,
-    last_vehicle,
-    epsilon=0
-):
-
-    # 発進待ち時間
+def calculate_T_sec(Nb, Nc, Nl, last_vehicle, epsilon=0):
+    # 1. 発進待ち時間
     queue_time = (
         Nb * H["bike"]
         + Nc * H["car"]
         + Nl * H["large"]
     )
 
-    # 移動距離
+    # 2. 最後尾車両が進む距離
     distance = (
         Nb * (L["bike"] + G["bike"])
         + Nc * (L["car"] + G["car"])
@@ -195,12 +198,12 @@ def calculate_T_sec(
         + L[last_vehicle]
     )
 
-    # 移動時間
+    # 3. 等加速度運動による移動時間
     move_time = np.sqrt(
         2 * distance / A[last_vehicle]
     )
 
-    # 通過時間
+    # 4. 通過時間
     T_sec = (
         t0
         + queue_time
@@ -218,7 +221,7 @@ T_list_min = []
 jam_list = []
 
 for _ in range(trials):
-
+    # 運転者ごとの反応誤差：-3秒〜+3秒
     epsilon = np.random.uniform(-3, 3)
 
     T_sec = calculate_T_sec(
@@ -233,16 +236,14 @@ for _ in range(trials):
 
     T_list_min.append(T_min)
 
-    jam_list.append(
-        T_min > C_min
-    )
+    # 渋滞判定：T > C
+    jam_list.append(T_min > C_min)
 
 avg_T_min = np.mean(T_list_min)
-
 jam_rate = np.mean(jam_list)
 
 # =====================================================
-# 結果
+# 結果表示
 # =====================================================
 
 st.subheader("シミュレーション結果")
@@ -266,7 +267,7 @@ r3.metric(
 
 r4.metric(
     "渋滞率",
-    f"{jam_rate*100:.1f}%"
+    f"{jam_rate * 100:.1f}%"
 )
 
 # =====================================================
@@ -280,10 +281,7 @@ max_N = max(
     N + 30
 )
 
-N_values = np.arange(
-    1,
-    max_N + 1
-)
+N_values = np.arange(1, max_N + 1)
 
 T_values = []
 
@@ -294,7 +292,6 @@ car_ratio = Nc / total
 large_ratio = Nl / total
 
 for n in N_values:
-
     nb = round(n * bike_ratio)
     nc = round(n * car_ratio)
     nl = n - nb - nc
@@ -307,13 +304,9 @@ for n in N_values:
         0
     )
 
-    T_values.append(
-        T_sec / 60
-    )
+    T_values.append(T_sec / 60)
 
-fig, ax = plt.subplots(
-    figsize=(10, 6)
-)
+fig, ax = plt.subplots(figsize=(10, 6))
 
 ax.plot(
     N_values,
