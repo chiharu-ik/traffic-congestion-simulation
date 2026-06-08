@@ -50,8 +50,6 @@ if demand_rate >= 1:
 # C = (1.5L + 5) / (1 - λ)
 # C：サイクル長（秒）
 C_sec = (1.5 * L_clearance + 5) / (1 - demand_rate)
-
-# 分に変換
 C_min = C_sec / 60
 
 GREEN_sec = C_sec - L_clearance
@@ -123,7 +121,7 @@ t0 = 2.0
 trials = st.slider("試行回数", 100, 5000, 1000)
 
 # ------------------
-# 通過時間を計算
+# 通過時間を計算する関数
 # ------------------
 def calculate_T_sec(Nb, Nc, Nl, last_vehicle, epsilon=0):
     queue_time = (
@@ -146,7 +144,6 @@ def calculate_T_sec(Nb, Nc, Nl, last_vehicle, epsilon=0):
 
     return T_sec
 
-
 # ------------------
 # シミュレーション
 # ------------------
@@ -159,7 +156,8 @@ for _ in range(trials):
     T_sec = calculate_T_sec(Nb, Nc, Nl, last_vehicle, epsilon)
     T_min = T_sec / 60
 
-    jam = C_min < T_min
+    # 参考値：誤差込みでCを超えた割合
+    jam = T_min > C_min
 
     T_list_min.append(T_min)
     jam_list.append(jam)
@@ -167,21 +165,25 @@ for _ in range(trials):
 avg_T_min = np.mean(T_list_min)
 jam_rate = np.mean(jam_list)
 
+# 本判定：平均通過時間Tとサイクル長Cの比較
+is_jam_by_average = avg_T_min > C_min
+
 # ------------------
 # 結果表示
 # ------------------
 st.subheader("シミュレーション結果")
 
-col_a, col_b, col_c = st.columns(3)
+col_a, col_b, col_c, col_d = st.columns(4)
 
 col_a.metric("前方車両数 N", N)
 col_b.metric("平均通過時間 T", f"{round(avg_T_min, 2)} 分")
-col_c.metric("渋滞率", f"{jam_rate * 100:.1f}%")
+col_c.metric("サイクル長 C", f"{round(C_min, 2)} 分")
+col_d.metric("参考：渋滞率", f"{jam_rate * 100:.1f}%")
 
-if avg_T_min > C_min:
-    st.error("判定：C < T のため、渋滞が発生しています。")
+if is_jam_by_average:
+    st.error("判定：平均通過時間 T がサイクル長 C を超えるため、渋滞が発生しています。")
 else:
-    st.success("判定：C ≥ T のため、渋滞は発生していません。")
+    st.success("判定：平均通過時間 T がサイクル長 C 以下のため、渋滞は発生していません。")
 
 # ------------------
 # Nを変化させたグラフ
