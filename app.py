@@ -180,10 +180,7 @@ col_b.metric("平均通過時間 T", f"{round(avg_T_min, 2)} 分")
 col_c.metric("サイクル長 C", f"{round(C_min, 2)} 分")
 col_d.metric("参考：渋滞率", f"{jam_rate * 100:.1f}%")
 
-if is_jam_by_average:
-    st.error("判定：平均通過時間 T がサイクル長 C を超えるため、渋滞が発生しています。")
-else:
-    st.success("判定：平均通過時間 T がサイクル長 C 以下のため、渋滞は発生していません。")
+
 
 # ------------------
 # Nを変化させたグラフ
