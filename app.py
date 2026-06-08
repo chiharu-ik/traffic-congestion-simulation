@@ -40,9 +40,14 @@ YELLOW = 5
 RED = 40
 L_clearance = YELLOW + RED
 
-MAX_CAPACITY = 60
+# 最大処理交通量
+# 普通車が約2秒ごとに発車すると仮定
+# 60秒 ÷ 2秒 = 30台/分
+MAX_CAPACITY = 30
+
 demand_rate = traffic_volume / MAX_CAPACITY
 
+# Webster式では λ が1以上になると計算できないため上限を設定
 if demand_rate >= 1:
     demand_rate = 0.99
 
@@ -89,7 +94,7 @@ vehicle_map = {
 last_vehicle = vehicle_map[last_vehicle_jp]
 
 # ------------------
-# 車両パラメータ
+# 固定パラメータ
 # ------------------
 L = {
     "bike": 2.0,
@@ -109,10 +114,12 @@ A = {
     "large": 1.0,
 }
 
+# 発車間隔
+# 二輪車：1秒、普通車：2秒、大型車：3秒
 H = {
-    "bike": 0.7,
-    "car": 1.0,
-    "large": 1.5,
+    "bike": 1.0,
+    "car": 2.0,
+    "large": 3.0,
 }
 
 D = 10.0
@@ -124,12 +131,14 @@ trials = st.slider("試行回数", 100, 5000, 1000)
 # 通過時間を計算する関数
 # ------------------
 def calculate_T_sec(Nb, Nc, Nl, last_vehicle, epsilon=0):
+    # 発進待ち時間
     queue_time = (
         Nb * H["bike"]
         + Nc * H["car"]
         + Nl * H["large"]
     )
 
+    # 最後尾車両が進む距離
     distance = (
         Nb * (L["bike"] + G["bike"])
         + Nc * (L["car"] + G["car"])
@@ -138,8 +147,10 @@ def calculate_T_sec(Nb, Nc, Nl, last_vehicle, epsilon=0):
         + L[last_vehicle]
     )
 
+    # 等加速度運動による移動時間
     move_time = np.sqrt(2 * distance / A[last_vehicle])
 
+    # 最後尾車両の通過時間
     T_sec = t0 + queue_time + move_time + epsilon
 
     return T_sec
@@ -148,39 +159,28 @@ def calculate_T_sec(Nb, Nc, Nl, last_vehicle, epsilon=0):
 # シミュレーション
 # ------------------
 T_list_min = []
-jam_list = []
 
 for _ in range(trials):
-    epsilon = np.random.uniform(-1, 1)
+    # 運転者の反応誤差：-3秒〜+3秒
+    epsilon = np.random.uniform(-3, 3)
 
     T_sec = calculate_T_sec(Nb, Nc, Nl, last_vehicle, epsilon)
     T_min = T_sec / 60
 
-    # 参考値：誤差込みでCを超えた割合
-    jam = T_min > C_min
-
     T_list_min.append(T_min)
-    jam_list.append(jam)
 
 avg_T_min = np.mean(T_list_min)
-jam_rate = np.mean(jam_list)
-
-# 本判定：平均通過時間Tとサイクル長Cの比較
-is_jam_by_average = avg_T_min > C_min
 
 # ------------------
 # 結果表示
 # ------------------
 st.subheader("シミュレーション結果")
 
-col_a, col_b, col_c, col_d = st.columns(4)
+col_a, col_b, col_c = st.columns(3)
 
 col_a.metric("前方車両数 N", N)
 col_b.metric("平均通過時間 T", f"{round(avg_T_min, 2)} 分")
 col_c.metric("サイクル長 C", f"{round(C_min, 2)} 分")
-col_d.metric("参考：渋滞率", f"{jam_rate * 100:.1f}%")
-
-
 
 # ------------------
 # Nを変化させたグラフ
