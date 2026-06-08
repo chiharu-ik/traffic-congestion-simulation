@@ -45,7 +45,7 @@ traffic_table = {
 traffic_volume = traffic_table[day_type][time_zone]
 
 # =====================================================
-# Webster
+# 信号設定
 # =====================================================
 
 YELLOW = 5
@@ -54,12 +54,13 @@ RED = 40
 L_clearance = YELLOW + RED
 
 # 最大処理交通量
+# 普通車の発車間隔2秒を想定
 MAX_CAPACITY = 30
 
 demand_rate = traffic_volume / MAX_CAPACITY
 
 if demand_rate >= 1:
-    demand_rate = 0.99
+    demand_rate = 0.95
 
 # Webster
 C_sec = (1.5 * L_clearance + 5) / (1 - demand_rate)
@@ -153,10 +154,10 @@ H = {
     "large": 3.0,
 }
 
-# 横断歩道までの距離
+# 横断歩道までの距離(m)
 D = 10.0
 
-# 先頭車両反応時間
+# 先頭車反応時間(sec)
 t0 = 2.0
 
 trials = st.slider(
@@ -167,7 +168,7 @@ trials = st.slider(
 )
 
 # =====================================================
-# T計算
+# 通過時間計算
 # =====================================================
 
 def calculate_T_sec(
@@ -178,12 +179,14 @@ def calculate_T_sec(
     epsilon=0
 ):
 
+    # 発進待ち時間
     queue_time = (
         Nb * H["bike"]
         + Nc * H["car"]
         + Nl * H["large"]
     )
 
+    # 移動距離
     distance = (
         Nb * (L["bike"] + G["bike"])
         + Nc * (L["car"] + G["car"])
@@ -192,10 +195,12 @@ def calculate_T_sec(
         + L[last_vehicle]
     )
 
+    # 移動時間
     move_time = np.sqrt(
         2 * distance / A[last_vehicle]
     )
 
+    # 通過時間
     T_sec = (
         t0
         + queue_time
@@ -214,10 +219,7 @@ jam_list = []
 
 for _ in range(trials):
 
-    epsilon = np.random.uniform(
-        -3,
-        3
-    )
+    epsilon = np.random.uniform(-3, 3)
 
     T_sec = calculate_T_sec(
         Nb,
@@ -294,9 +296,7 @@ large_ratio = Nl / total
 for n in N_values:
 
     nb = round(n * bike_ratio)
-
     nc = round(n * car_ratio)
-
     nl = n - nb - nc
 
     T_sec = calculate_T_sec(
@@ -319,30 +319,21 @@ ax.plot(
     N_values,
     T_values,
     linewidth=2,
-    label="Passing time T"
+    label="Passing Time T"
 )
 
 ax.axhline(
     C_min,
     linestyle="--",
     linewidth=2,
-    label="Cycle length C"
+    label="Cycle Length C"
 )
 
-ax.set_xlabel(
-    "Number of vehicles N"
-)
-
-ax.set_ylabel(
-    "Passing time T (min)"
-)
-
-ax.set_title(
-    "Relationship between N and Passing Time T"
-)
+ax.set_xlabel("Number of Vehicles N")
+ax.set_ylabel("Passing Time T (min)")
+ax.set_title("Relationship between N and Passing Time T")
 
 ax.grid(True)
-
 ax.legend()
 
 st.pyplot(fig)
