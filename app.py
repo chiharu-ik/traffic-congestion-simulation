@@ -281,6 +281,20 @@ else:
     animation_mode = "wait"
     st.write("対向車が50m以上離れていないため、右折車は一度停止し、後続車も追い越さずに待機します。")
 
+right_car_class = "right-safe" if animation_mode == "safe" else "right-wait"
+
+opposite_cars = ""
+if animation_mode == "wait":
+    opposite_cars = """
+    <div class="car opposite opp1"></div>
+    <div class="car opposite opp2"></div>
+    <div class="car opposite opp3"></div>
+    """
+else:
+    opposite_cars = """
+    <div class="car opposite opp1"></div>
+    """
+
 html_code = f"""
 <!DOCTYPE html>
 <html>
@@ -322,40 +336,43 @@ body {{
   background: #d9d9d9;
 }}
 
-.line-v1, .line-v2, .line-h1, .line-h2 {{
+.border-v-left {{
   position: absolute;
-  background: #6b3f1d;
-}}
-
-.line-v1 {{
   left: 300px;
   top: 0;
   width: 3px;
   height: 720px;
+  background: #6b3f1d;
 }}
 
-.line-v2 {{
+.border-v-right {{
+  position: absolute;
   left: 420px;
   top: 0;
   width: 3px;
   height: 720px;
+  background: #6b3f1d;
 }}
 
-.line-h1 {{
+.border-h-top {{
+  position: absolute;
   left: 0;
   top: 300px;
   width: 720px;
   height: 3px;
+  background: #6b3f1d;
 }}
 
-.line-h2 {{
+.border-h-bottom {{
+  position: absolute;
   left: 0;
   top: 420px;
   width: 720px;
   height: 3px;
+  background: #6b3f1d;
 }}
 
-.center-line-v {{
+.center-v {{
   position: absolute;
   left: 359px;
   top: 0;
@@ -370,7 +387,7 @@ body {{
   );
 }}
 
-.center-line-h {{
+.center-h {{
   position: absolute;
   left: 0;
   top: 359px;
@@ -385,7 +402,10 @@ body {{
   );
 }}
 
-.crosswalk-v-top, .crosswalk-v-bottom, .crosswalk-h-left, .crosswalk-h-right {{
+.crosswalk-v-top,
+.crosswalk-v-bottom,
+.crosswalk-h-left,
+.crosswalk-h-right {{
   position: absolute;
 }}
 
@@ -423,57 +443,55 @@ body {{
   background: white;
 }}
 
-.signal {{
+.signal-own {{
   position: absolute;
-  width: 34px;
-  height: 82px;
-  border-radius: 10px;
+  left: 435px;
+  top: 435px;
+  width: 32px;
+  height: 78px;
+  border-radius: 9px;
   background: #222;
-  right: 245px;
-  bottom: 225px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: space-around;
   padding: 6px 0;
   box-sizing: border-box;
+  z-index: 5;
+}}
+
+.signal-opp {{
+  position: absolute;
+  left: 250px;
+  top: 205px;
+  width: 32px;
+  height: 78px;
+  border-radius: 9px;
+  background: #222;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-around;
+  padding: 6px 0;
+  box-sizing: border-box;
+  z-index: 5;
 }}
 
 .light {{
-  width: 18px;
-  height: 18px;
+  width: 17px;
+  height: 17px;
   border-radius: 50%;
   background: #555;
 }}
 
-.green {{
-  background: #26c281;
-  box-shadow: 0 0 10px #26c281;
-}}
-
-.red {{
-  background: #555;
-}}
-
-.opposite-signal {{
-  position: absolute;
-  width: 34px;
-  height: 82px;
-  border-radius: 10px;
-  background: #222;
-  left: 245px;
-  top: 225px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: space-around;
-  padding: 6px 0;
-  box-sizing: border-box;
-}}
-
-.opp-red {{
+.light-red {{
   background: #e74c3c;
-  box-shadow: 0 0 10px #e74c3c;
+  box-shadow: 0 0 8px #e74c3c;
+}}
+
+.light-green {{
+  background: #2ecc71;
+  box-shadow: 0 0 8px #2ecc71;
 }}
 
 .car {{
@@ -487,142 +505,160 @@ body {{
   font-weight: bold;
   text-align: center;
   line-height: 52px;
-  font-size: 16px;
+  font-size: 15px;
+  z-index: 10;
+  animation-duration: 16s;
+  animation-timing-function: ease-in-out;
+  animation-fill-mode: forwards;
 }}
 
-.car-blue {{
+.blue {{
   background: #1f77b4;
 }}
 
-.car-red {{
+.red {{
   background: #d62728;
 }}
 
-.car-green {{
+.green {{
   background: #2ca02c;
 }}
 
-.car-purple {{
+.opposite {{
   background: #9467bd;
-}}
-
-.car-horizontal {{
-  width: 56px;
-  height: 32px;
-  line-height: 28px;
 }}
 
 .note {{
   position: absolute;
   left: 24px;
   bottom: 20px;
-  font-size: 14px;
-  color: #333;
-  background: rgba(255,255,255,0.85);
+  background: rgba(255,255,255,0.90);
   padding: 8px 12px;
   border-radius: 8px;
+  color: #333;
+  font-size: 14px;
+  z-index: 20;
 }}
 
-@keyframes straight {{
+/* 先頭の直進車3台 */
+@keyframes straight1 {{
   0%   {{ left: 326px; top: 760px; transform: rotate(0deg); }}
   100% {{ left: 326px; top: -80px; transform: rotate(0deg); }}
 }}
 
-@keyframes leftTurn {{
-  0%   {{ left: 326px; top: 760px; transform: rotate(0deg); }}
-  55%  {{ left: 326px; top: 350px; transform: rotate(0deg); }}
-  70%  {{ left: 250px; top: 350px; transform: rotate(-90deg); }}
-  100% {{ left: -80px; top: 350px; transform: rotate(-90deg); }}
-}}
-
-@keyframes rightTurnSafe {{
-  0%   {{ left: 326px; top: 760px; transform: rotate(0deg); }}
-  55%  {{ left: 326px; top: 330px; transform: rotate(0deg); }}
-  70%  {{ left: 395px; top: 330px; transform: rotate(90deg); }}
-  100% {{ left: 760px; top: 330px; transform: rotate(90deg); }}
-}}
-
-@keyframes rightTurnWait {{
-  0%   {{ left: 326px; top: 760px; transform: rotate(0deg); }}
-  35%  {{ left: 326px; top: 430px; transform: rotate(0deg); }}
-  58%  {{ left: 326px; top: 430px; transform: rotate(0deg); }}
-  72%  {{ left: 395px; top: 330px; transform: rotate(90deg); }}
-  100% {{ left: 760px; top: 330px; transform: rotate(90deg); }}
-}}
-
-@keyframes queueCar1 {{
-  0%   {{ left: 326px; top: 860px; transform: rotate(0deg); }}
-  35%  {{ left: 326px; top: 500px; transform: rotate(0deg); }}
-  58%  {{ left: 326px; top: 500px; transform: rotate(0deg); }}
+@keyframes straight2 {{
+  0%   {{ left: 326px; top: 840px; transform: rotate(0deg); }}
   100% {{ left: 326px; top: -80px; transform: rotate(0deg); }}
 }}
 
-@keyframes queueCar2 {{
-  0%   {{ left: 326px; top: 940px; transform: rotate(0deg); }}
-  35%  {{ left: 326px; top: 570px; transform: rotate(0deg); }}
-  58%  {{ left: 326px; top: 570px; transform: rotate(0deg); }}
-  70%  {{ left: 326px; top: 350px; transform: rotate(0deg); }}
-  85%  {{ left: 250px; top: 350px; transform: rotate(-90deg); }}
+@keyframes straight3 {{
+  0%   {{ left: 326px; top: 920px; transform: rotate(0deg); }}
+  100% {{ left: 326px; top: -80px; transform: rotate(0deg); }}
+}}
+
+/* 右折車：安全時 */
+@keyframes rightSafe {{
+  0%   {{ left: 326px; top: 1000px; transform: rotate(0deg); }}
+  45%  {{ left: 326px; top: 345px; transform: rotate(0deg); }}
+  65%  {{ left: 420px; top: 330px; transform: rotate(90deg); }}
+  100% {{ left: 760px; top: 330px; transform: rotate(90deg); }}
+}}
+
+/* 右折車：待機時 */
+@keyframes rightWait {{
+  0%   {{ left: 326px; top: 1000px; transform: rotate(0deg); }}
+  32%  {{ left: 326px; top: 430px; transform: rotate(0deg); }}
+  55%  {{ left: 326px; top: 430px; transform: rotate(0deg); }}
+  75%  {{ left: 420px; top: 330px; transform: rotate(90deg); }}
+  100% {{ left: 760px; top: 330px; transform: rotate(90deg); }}
+}}
+
+/* 後続車：右折車の後ろで待ってから進む */
+@keyframes queueStraight {{
+  0%   {{ left: 326px; top: 1080px; transform: rotate(0deg); }}
+  34%  {{ left: 326px; top: 505px; transform: rotate(0deg); }}
+  58%  {{ left: 326px; top: 505px; transform: rotate(0deg); }}
+  100% {{ left: 326px; top: -80px; transform: rotate(0deg); }}
+}}
+
+@keyframes queueLeft1 {{
+  0%   {{ left: 326px; top: 1160px; transform: rotate(0deg); }}
+  36%  {{ left: 326px; top: 585px; transform: rotate(0deg); }}
+  60%  {{ left: 326px; top: 585px; transform: rotate(0deg); }}
+  78%  {{ left: 326px; top: 350px; transform: rotate(0deg); }}
+  90%  {{ left: 250px; top: 350px; transform: rotate(-90deg); }}
   100% {{ left: -80px; top: 350px; transform: rotate(-90deg); }}
 }}
 
-@keyframes queueCar3 {{
-  0%   {{ left: 326px; top: 1020px; transform: rotate(0deg); }}
-  35%  {{ left: 326px; top: 640px; transform: rotate(0deg); }}
-  58%  {{ left: 326px; top: 640px; transform: rotate(0deg); }}
-  70%  {{ left: 326px; top: 350px; transform: rotate(0deg); }}
-  85%  {{ left: 250px; top: 350px; transform: rotate(-90deg); }}
+@keyframes queueLeft2 {{
+  0%   {{ left: 326px; top: 1240px; transform: rotate(0deg); }}
+  38%  {{ left: 326px; top: 665px; transform: rotate(0deg); }}
+  62%  {{ left: 326px; top: 665px; transform: rotate(0deg); }}
+  80%  {{ left: 326px; top: 350px; transform: rotate(0deg); }}
+  92%  {{ left: 250px; top: 350px; transform: rotate(-90deg); }}
   100% {{ left: -80px; top: 350px; transform: rotate(-90deg); }}
 }}
 
-@keyframes opposite {{
+/* 後ろの直進車 */
+@keyframes afterStraight1 {{
+  0%   {{ left: 326px; top: 1320px; transform: rotate(0deg); }}
+  55%  {{ left: 326px; top: 760px; transform: rotate(0deg); }}
+  100% {{ left: 326px; top: -80px; transform: rotate(0deg); }}
+}}
+
+@keyframes afterStraight2 {{
+  0%   {{ left: 326px; top: 1400px; transform: rotate(0deg); }}
+  60%  {{ left: 326px; top: 760px; transform: rotate(0deg); }}
+  100% {{ left: 326px; top: -80px; transform: rotate(0deg); }}
+}}
+
+@keyframes afterStraight3 {{
+  0%   {{ left: 326px; top: 1480px; transform: rotate(0deg); }}
+  65%  {{ left: 326px; top: 760px; transform: rotate(0deg); }}
+  100% {{ left: 326px; top: -80px; transform: rotate(0deg); }}
+}}
+
+/* 対向車：右折車が動く前に通過し終える */
+@keyframes oppositeMove {{
   0%   {{ left: 365px; top: -80px; transform: rotate(180deg); }}
   100% {{ left: 365px; top: 760px; transform: rotate(180deg); }}
 }}
 
-.anim {{
-  animation-duration: 12s;
-  animation-timing-function: ease-in-out;
-  animation-fill-mode: forwards;
-}}
+.s1 {{ animation-name: straight1; animation-delay: 0s; }}
+.s2 {{ animation-name: straight2; animation-delay: 0.7s; }}
+.s3 {{ animation-name: straight3; animation-delay: 1.4s; }}
 
-.straight1 {{ animation-name: straight; animation-delay: 0s; }}
-.straight2 {{ animation-name: straight; animation-delay: 1.0s; }}
-.straight3 {{ animation-name: straight; animation-delay: 2.0s; }}
+.right-safe {{ animation-name: rightSafe; animation-delay: 2.1s; }}
+.right-wait {{ animation-name: rightWait; animation-delay: 2.1s; }}
 
-.right-safe {{ animation-name: rightTurnSafe; animation-delay: 3.0s; }}
-.right-wait {{ animation-name: rightTurnWait; animation-delay: 3.0s; }}
+.qs {{ animation-name: queueStraight; animation-delay: 2.1s; }}
+.ql1 {{ animation-name: queueLeft1; animation-delay: 2.1s; }}
+.ql2 {{ animation-name: queueLeft2; animation-delay: 2.1s; }}
 
-.queue1 {{ animation-name: queueCar1; animation-delay: 3.8s; }}
-.queue2 {{ animation-name: queueCar2; animation-delay: 4.2s; }}
-.queue3 {{ animation-name: queueCar3; animation-delay: 4.6s; }}
+.as1 {{ animation-name: afterStraight1; animation-delay: 2.1s; }}
+.as2 {{ animation-name: afterStraight2; animation-delay: 2.1s; }}
+.as3 {{ animation-name: afterStraight3; animation-delay: 2.1s; }}
 
-.straight-after1 {{ animation-name: straight; animation-delay: 10.0s; }}
-.straight-after2 {{ animation-name: straight; animation-delay: 11.0s; }}
-.straight-after3 {{ animation-name: straight; animation-delay: 12.0s; }}
-.straight-after4 {{ animation-name: straight; animation-delay: 13.0s; }}
-
-.opp1 {{ animation-name: opposite; animation-delay: 0s; }}
-.opp2 {{ animation-name: opposite; animation-delay: 2.0s; }}
-.opp3 {{ animation-name: opposite; animation-delay: 4.0s; }}
-.opp4 {{ animation-name: opposite; animation-delay: 6.0s; }}
-.opp5 {{ animation-name: opposite; animation-delay: 8.0s; }}
+.opp1 {{ animation-name: oppositeMove; animation-delay: 0s; animation-duration: 5s; }}
+.opp2 {{ animation-name: oppositeMove; animation-delay: 1.4s; animation-duration: 5s; }}
+.opp3 {{ animation-name: oppositeMove; animation-delay: 2.8s; animation-duration: 5s; }}
 
 </style>
 </head>
 
 <body>
 <div class="scene">
+
   <div class="road-v"></div>
   <div class="road-h"></div>
 
-  <div class="line-v1"></div>
-  <div class="line-v2"></div>
-  <div class="line-h1"></div>
-  <div class="line-h2"></div>
+  <div class="border-v-left"></div>
+  <div class="border-v-right"></div>
+  <div class="border-h-top"></div>
+  <div class="border-h-bottom"></div>
 
-  <div class="center-line-v"></div>
-  <div class="center-line-h"></div>
+  <div class="center-v"></div>
+  <div class="center-h"></div>
 
   <div class="crosswalk-v-top">
     <div class="stripe-v" style="left:0px;"></div>
@@ -656,36 +692,38 @@ body {{
     <div class="stripe-h" style="top:128px;"></div>
   </div>
 
-  <div class="signal">
-    <div class="light red"></div>
+  <div class="signal-own">
     <div class="light"></div>
-    <div class="light green"></div>
+    <div class="light"></div>
+    <div class="light light-green"></div>
   </div>
 
-  <div class="opposite-signal">
-    <div class="light opp-red"></div>
+  <div class="signal-opp">
+    <div class="light light-red"></div>
     <div class="light"></div>
     <div class="light"></div>
   </div>
 
-  <div class="car car-blue anim straight1"></div>
-  <div class="car car-blue anim straight2"></div>
-  <div class="car car-blue anim straight3"></div>
+  {opposite_cars}
 
-  {"<div class='car car-red anim right-safe'>R</div>" if animation_mode == "safe" else "<div class='car car-red anim right-wait'>R</div>"}
+  <div class="car blue s1"></div>
+  <div class="car blue s2"></div>
+  <div class="car blue s3"></div>
 
-  {"<div class='car car-blue anim queue1'></div><div class='car car-green anim queue2'>L</div><div class='car car-green anim queue3'>L</div>" if animation_mode == "wait" else "<div class='car car-green anim queue2'>L</div><div class='car car-green anim queue3'>L</div>"}
+  <div class="car red {right_car_class}">R</div>
 
-  <div class="car car-blue anim straight-after1"></div>
-  <div class="car car-blue anim straight-after2"></div>
-  <div class="car car-blue anim straight-after3"></div>
-  <div class="car car-blue anim straight-after4"></div>
+  <div class="car blue qs"></div>
+  <div class="car green ql1">L</div>
+  <div class="car green ql2">L</div>
 
-  {"<div class='car car-purple anim opp1'></div><div class='car car-purple anim opp2'></div><div class='car car-purple anim opp3'></div><div class='car car-purple anim opp4'></div><div class='car car-purple anim opp5'></div>" if animation_mode == "wait" else "<div class='car car-purple anim opp1'></div><div class='car car-purple anim opp3'></div>"}
+  <div class="car blue as1"></div>
+  <div class="car blue as2"></div>
+  <div class="car blue as3"></div>
 
   <div class="note">
     片側1車線：右折車が停止すると後続車も停止する
   </div>
+
 </div>
 </body>
 </html>
