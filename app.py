@@ -415,13 +415,13 @@ def draw_state_1():
     draw_car(ax, -0.45, -4.6, "#2ca02c", "L")
 
     # 対向車
-    draw_car(ax, 0.45, 3.3, "#9467bd", "対", "down")
+    draw_car(ax, 0.45, 3.3, "#9467bd", "O", "down")
 
     # 判断距離
     ax.plot([0.8, 0.8], [1.2, 4.2], color="#9467bd", linestyle="--", linewidth=1.5)
-    ax.text(1.0, 3.8, "対向車との距離を確認", fontsize=8)
+    ax.text(1.0, 3.8, "Check distance", fontsize=8)
 
-    ax.set_title("状態①：右折判断前", fontsize=12)
+    ax.set_title("State 1", fontsize=12)
 
     return fig
 
@@ -440,13 +440,13 @@ def draw_state_2():
     draw_car(ax, -0.45, -4.4, "#1f77b4")
 
     # 対向車が近い
-    draw_car(ax, 0.45, 1.7, "#9467bd", "対", "down")
+    draw_car(ax, 0.45, 1.7, "#9467bd", "O", "down")
 
-    ax.text(-5.5, 5.1, "対向車が50m未満", fontsize=9, color="#9467bd")
-    ax.text(-5.5, 4.6, "右折車は停止", fontsize=9, color="#d62728")
-    ax.text(-5.5, 4.1, "後続車も追い越せない", fontsize=9)
+    ax.text(-5.5, 5.1, "Opponent < 50m", fontsize=9, color="#9467bd")
+    ax.text(-5.5, 4.6, "Right car stops", fontsize=9, color="#d62728")
+    ax.text(-5.5, 4.1, "Following cars wait", fontsize=9)
 
-    ax.set_title("状態②：右折待ち", fontsize=12)
+    ax.set_title("State 2", fontsize=12)
 
     return fig
 
@@ -468,13 +468,13 @@ def draw_state_3():
     draw_car(ax, -0.45, -4.2, "#1f77b4")
 
     # 対向車が遠い
-    draw_car(ax, 0.45, 5.0, "#9467bd", "対", "down")
+    draw_car(ax, 0.45, 5.0, "#9467bd", "O", "down")
 
-    ax.text(-5.5, 5.1, "対向車が50m以上離れた", fontsize=9, color="#9467bd")
-    ax.text(-5.5, 4.6, "右折車が再加速して右折", fontsize=9, color="#d62728")
-    ax.text(-5.5, 4.1, "その後、後続車が進む", fontsize=9)
+    ax.text(-5.5, 5.1, "Opponent >= 50m", fontsize=9, color="#9467bd")
+    ax.text(-5.5, 4.6, "Right car turns", fontsize=9, color="#d62728")
+    ax.text(-5.5, 4.1, "Following cars move", fontsize=9)
 
-    ax.set_title("状態③：右折開始", fontsize=12)
+    ax.set_title("State 3", fontsize=12)
 
     return fig
 
@@ -487,15 +487,15 @@ col1, col2, col3 = st.columns(3)
 
 with col1:
     st.pyplot(fig1)
-    st.caption("右折車が減速し、対向車との距離を確認する。")
+    st.caption("状態①：右折車が減速し、対向車との距離を確認する。")
 
 with col2:
     st.pyplot(fig2)
-    st.caption("対向車が50m未満の場合、右折車は停止し、後続車も待機する。")
+    st.caption("状態②：対向車が50m未満の場合、右折車は停止し、後続車も待機する。")
 
 with col3:
     st.pyplot(fig3)
-    st.caption("対向車が50m以上離れたら、右折車が右折し、後続車が進む。")
+    st.caption("状態③：対向車が50m以上離れたら、右折車が右折し、後続車が進む。")
 
 plt.close(fig1)
 plt.close(fig2)
