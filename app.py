@@ -1,8 +1,6 @@
 import streamlit as st
 import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib.patches import Rectangle, FancyBboxPatch
-import time
+import streamlit.components.v1 as components
 
 st.set_page_config(page_title="渋滞シミュレーション", layout="wide")
 st.title("🚗 渋滞シミュレーション")
@@ -38,16 +36,15 @@ traffic_table = {
 traffic_volume = traffic_table[day_type][time_zone]
 
 # =========================
-# 2. 信号サイクルの設定
+# 2. 信号サイクル
 # =========================
 
 YELLOW = 5
 RED = 40
 L_clearance = YELLOW + RED
-
 MAX_CAPACITY = 30
-demand_rate = traffic_volume / MAX_CAPACITY
 
+demand_rate = traffic_volume / MAX_CAPACITY
 if demand_rate >= 1:
     demand_rate = 0.95
 
@@ -66,7 +63,7 @@ c3.metric("サイクル長 C", f"{C_min:.2f} 分")
 c4.metric("青信号時間", f"{GREEN_min:.2f} 分")
 
 # =========================
-# 3. 車両数の設定
+# 3. 車両数
 # =========================
 
 st.subheader("前方車両数の設定")
@@ -84,11 +81,10 @@ vehicle_map = {
     "二輪車": "bike",
     "大型車": "large"
 }
-
 last_vehicle = vehicle_map[last_vehicle_jp]
 
 # =========================
-# 4. 車両の特性
+# 4. 車両特性
 # =========================
 
 L = {
@@ -125,7 +121,7 @@ D = 10.0
 t0 = 2.0
 
 # =========================
-# 5. 直進・右折・左折の固定割合
+# 5. 直進・右折・左折
 # =========================
 
 st.subheader("直進・右折・左折の割合")
@@ -138,15 +134,15 @@ N_straight = round(N * STRAIGHT_RATIO)
 N_right = round(N * RIGHT_RATIO)
 N_left = N - N_straight - N_right
 
-ratio_cols = st.columns(3)
-ratio_cols[0].metric("直進車", f"{N_straight} 台")
-ratio_cols[1].metric("右折車", f"{N_right} 台")
-ratio_cols[2].metric("左折車", f"{N_left} 台")
+r1, r2, r3 = st.columns(3)
+r1.metric("直進車", f"{N_straight} 台")
+r2.metric("右折車", f"{N_right} 台")
+r3.metric("左折車", f"{N_left} 台")
 
 st.write("直進：右折：左折 ＝ 7：1：2 で固定")
 
 # =========================
-# 6. 右折・左折条件
+# 6. 右折条件
 # =========================
 
 st.subheader("右折・左折条件")
@@ -189,7 +185,6 @@ else:
 
 trials = st.slider("試行回数", 100, 5000, 1000)
 
-
 def calculate_move_time(Nb, Nc, Nl, last_vehicle):
     x = (
         Nb * (L["bike"] + G["bike"])
@@ -198,10 +193,7 @@ def calculate_move_time(Nb, Nc, Nl, last_vehicle):
         + D
         + L[last_vehicle]
     )
-
-    move_time = np.sqrt(2 * x / A[last_vehicle])
-    return move_time
-
+    return np.sqrt(2 * x / A[last_vehicle])
 
 def calculate_turn_time(N_left, N_right, last_vehicle, right_turn_wait):
     turn_speed = TURN_SPEED[last_vehicle]
@@ -216,7 +208,6 @@ def calculate_turn_time(N_left, N_right, last_vehicle, right_turn_wait):
         right_turn_time = DECELERATION_DISTANCE / turn_speed + right_turn_wait
 
     return left_turn_time + right_turn_time
-
 
 def calculate_T_sec(Nb, Nc, Nl, last_vehicle, N_left, N_right, right_turn_wait, epsilon=0):
     queue_time = (
@@ -234,16 +225,7 @@ def calculate_T_sec(Nb, Nc, Nl, last_vehicle, N_left, N_right, right_turn_wait, 
         right_turn_wait
     )
 
-    T_sec = (
-        t0
-        + queue_time
-        + move_time
-        + turn_time
-        + epsilon
-    )
-
-    return T_sec
-
+    return t0 + queue_time + move_time + turn_time + epsilon
 
 T_list_min = []
 jam_list = []
@@ -274,12 +256,12 @@ jam_rate = np.mean(jam_list)
 
 st.subheader("シミュレーション結果")
 
-r1, r2, r3, r4 = st.columns(4)
+m1, m2, m3, m4 = st.columns(4)
 
-r1.metric("前方車両数 N", N)
-r2.metric("平均通過時間 T", f"{avg_T_min:.2f} 分")
-r3.metric("サイクル長 C", f"{C_min:.2f} 分")
-r4.metric("渋滞率", f"{jam_rate * 100:.1f}%")
+m1.metric("前方車両数 N", N)
+m2.metric("平均通過時間 T", f"{avg_T_min:.2f} 分")
+m3.metric("サイクル長 C", f"{C_min:.2f} 分")
+m4.metric("渋滞率", f"{jam_rate * 100:.1f}%")
 
 if avg_T_min > C_min:
     st.error("判定：渋滞が発生しやすい状態です。")
@@ -287,220 +269,426 @@ else:
     st.success("判定：1回の信号サイクル内で処理できる状態です。")
 
 # =========================
-# 9. 交差点アニメーション
+# 9. HTML/CSS アニメーション
 # =========================
 
-def smoothstep(t):
-    t = max(0, min(1, t))
-    return t * t * (3 - 2 * t)
+st.subheader("交差点アニメーション")
 
+if can_turn_right:
+    animation_mode = "safe"
+    st.write("対向車が50m以上離れているため、右折車は停止せずに右折します。")
+else:
+    animation_mode = "wait"
+    st.write("対向車が50m以上離れていないため、右折車は一度停止し、後続車も追い越さずに待機します。")
 
-def draw_road(ax):
-    ax.set_xlim(-6, 6)
-    ax.set_ylim(-6, 6)
-    ax.set_aspect("equal")
-    ax.axis("off")
-    ax.set_facecolor("white")
+html_code = f"""
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+body {{
+  margin: 0;
+  padding: 0;
+  background: white;
+  font-family: sans-serif;
+}}
 
-    road_color = "#d9d9d9"
-    line_color = "#6b3f1d"
+.scene {{
+  position: relative;
+  width: 720px;
+  height: 720px;
+  margin: 0 auto;
+  background: #f7f7f7;
+  border-radius: 28px;
+  overflow: hidden;
+}}
 
-    # 道路
-    ax.add_patch(Rectangle((-1.2, -6), 2.4, 12, facecolor=road_color, edgecolor="none"))
-    ax.add_patch(Rectangle((-6, -1.2), 12, 2.4, facecolor=road_color, edgecolor="none"))
+.road-v {{
+  position: absolute;
+  left: 300px;
+  top: 0;
+  width: 120px;
+  height: 720px;
+  background: #d9d9d9;
+}}
 
-    # 道路外枠
-    ax.plot([-1.2, -1.2], [-6, -1.2], color=line_color, linewidth=1.5)
-    ax.plot([1.2, 1.2], [-6, -1.2], color=line_color, linewidth=1.5)
-    ax.plot([-1.2, -1.2], [1.2, 6], color=line_color, linewidth=1.5)
-    ax.plot([1.2, 1.2], [1.2, 6], color=line_color, linewidth=1.5)
+.road-h {{
+  position: absolute;
+  left: 0;
+  top: 300px;
+  width: 720px;
+  height: 120px;
+  background: #d9d9d9;
+}}
 
-    ax.plot([-6, -1.2], [1.2, 1.2], color=line_color, linewidth=1.5)
-    ax.plot([-6, -1.2], [-1.2, -1.2], color=line_color, linewidth=1.5)
-    ax.plot([1.2, 6], [1.2, 1.2], color=line_color, linewidth=1.5)
-    ax.plot([1.2, 6], [-1.2, -1.2], color=line_color, linewidth=1.5)
+.line-v1, .line-v2, .line-h1, .line-h2 {{
+  position: absolute;
+  background: #6b3f1d;
+}}
 
-    # 中央線
-    ax.plot([0, 0], [-6, -1.5], color=line_color, linestyle=(0, (5, 5)), linewidth=1.3)
-    ax.plot([0, 0], [1.5, 6], color=line_color, linestyle=(0, (5, 5)), linewidth=1.3)
-    ax.plot([-6, -1.5], [0, 0], color=line_color, linestyle=(0, (5, 5)), linewidth=1.3)
-    ax.plot([1.5, 6], [0, 0], color=line_color, linestyle=(0, (5, 5)), linewidth=1.3)
+.line-v1 {{
+  left: 300px;
+  top: 0;
+  width: 3px;
+  height: 720px;
+}}
 
-    # 横断歩道 下側・上側
-    for x in [-0.75, -0.35, 0.05, 0.45, 0.85]:
-        ax.add_patch(Rectangle((x, -2.0), 0.18, 1.0, facecolor="white", edgecolor="none"))
-        ax.add_patch(Rectangle((x, 1.0), 0.18, 1.0, facecolor="white", edgecolor="none"))
+.line-v2 {{
+  left: 420px;
+  top: 0;
+  width: 3px;
+  height: 720px;
+}}
 
-    # 横断歩道 左側・右側
-    for y in [-0.85, -0.45, -0.05, 0.35, 0.75]:
-        ax.add_patch(Rectangle((-2.0, y), 1.0, 0.18, facecolor="white", edgecolor="none"))
-        ax.add_patch(Rectangle((1.0, y), 1.0, 0.18, facecolor="white", edgecolor="none"))
+.line-h1 {{
+  left: 0;
+  top: 300px;
+  width: 720px;
+  height: 3px;
+}}
 
+.line-h2 {{
+  left: 0;
+  top: 420px;
+  width: 720px;
+  height: 3px;
+}}
 
-def draw_car(ax, x, y, direction, color, label=None):
-    if direction in ["up", "down"]:
-        w, h = 0.34, 0.62
-    else:
-        w, h = 0.62, 0.34
+.center-line-v {{
+  position: absolute;
+  left: 359px;
+  top: 0;
+  width: 4px;
+  height: 720px;
+  background: repeating-linear-gradient(
+    to bottom,
+    #6b3f1d 0px,
+    #6b3f1d 28px,
+    transparent 28px,
+    transparent 58px
+  );
+}}
 
-    car = FancyBboxPatch(
-        (x - w / 2, y - h / 2),
-        w,
-        h,
-        boxstyle="round,pad=0.02,rounding_size=0.06",
-        facecolor=color,
-        edgecolor="#333333",
-        linewidth=0.8
-    )
-    ax.add_patch(car)
+.center-line-h {{
+  position: absolute;
+  left: 0;
+  top: 359px;
+  width: 720px;
+  height: 4px;
+  background: repeating-linear-gradient(
+    to right,
+    #6b3f1d 0px,
+    #6b3f1d 28px,
+    transparent 28px,
+    transparent 58px
+  );
+}}
 
-    if label:
-        ax.text(x, y, label, color="white", ha="center", va="center", fontsize=7)
+.crosswalk-v-top, .crosswalk-v-bottom, .crosswalk-h-left, .crosswalk-h-right {{
+  position: absolute;
+}}
 
+.crosswalk-v-top {{
+  left: 315px;
+  top: 235px;
+}}
 
-def route_position(route, p):
-    p = smoothstep(p)
+.crosswalk-v-bottom {{
+  left: 315px;
+  top: 425px;
+}}
 
-    # 直進
-    if route == "S":
-        x = -0.45
-        y = -5.4 + 10.8 * p
-        return x, y, "up"
+.crosswalk-h-left {{
+  left: 235px;
+  top: 315px;
+}}
 
-    # 左折
-    if route == "L":
-        if p < 0.58:
-            q = p / 0.58
-            x = -0.45
-            y = -5.4 + 5.2 * q
-            return x, y, "up"
-        else:
-            q = (p - 0.58) / 0.42
-            q = smoothstep(q)
-            x = -0.45 - 4.8 * q
-            y = -0.25
-            return x, y, "left"
+.crosswalk-h-right {{
+  left: 425px;
+  top: 315px;
+}}
 
-    # 右折
-    if route == "R":
-        if p < 0.58:
-            q = p / 0.58
-            x = -0.45
-            y = -5.4 + 5.2 * q
-            return x, y, "up"
-        else:
-            q = (p - 0.58) / 0.42
-            q = smoothstep(q)
-            x = -0.45 + 4.8 * q
-            y = 0.25
-            return x, y, "right"
+.stripe-v {{
+  position: absolute;
+  width: 14px;
+  height: 62px;
+  background: white;
+}}
 
-    return -0.45, -5.4, "up"
+.stripe-h {{
+  position: absolute;
+  width: 62px;
+  height: 14px;
+  background: white;
+}}
 
+.signal {{
+  position: absolute;
+  width: 34px;
+  height: 82px;
+  border-radius: 10px;
+  background: #222;
+  right: 245px;
+  bottom: 225px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-around;
+  padding: 6px 0;
+  box-sizing: border-box;
+}}
 
-def draw_animation(can_turn_right):
-    st.subheader("交差点アニメーション")
-    st.write("片側1車線のため、右折車が停止すると、後続車も追い越さずに待機します。")
-    st.write("表示は、直進7台・右折1台・左折2台で固定しています。")
+.light {{
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #555;
+}}
 
-    placeholder = st.empty()
+.green {{
+  background: #26c281;
+  box-shadow: 0 0 10px #26c281;
+}}
 
-    # 直進7：右折1：左折2
-    # 右折車を途中に配置して、右折待ちが後続車に影響する様子を表示
-    routes = ["S", "S", "S", "R", "L", "L", "S", "S", "S", "S"]
+.red {{
+  background: #555;
+}}
 
-    colors = {
-        "S": "#1f77b4",
-        "R": "#d62728",
-        "L": "#2ca02c",
-        "O": "#9467bd",
-    }
+.opposite-signal {{
+  position: absolute;
+  width: 34px;
+  height: 82px;
+  border-radius: 10px;
+  background: #222;
+  left: 245px;
+  top: 225px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-around;
+  padding: 6px 0;
+  box-sizing: border-box;
+}}
 
-    total_steps = 260
-    frame_sleep = 0.025
+.opp-red {{
+  background: #e74c3c;
+  box-shadow: 0 0 10px #e74c3c;
+}}
 
-    start_gap = 22
-    move_duration = 120
+.car {{
+  position: absolute;
+  width: 32px;
+  height: 56px;
+  border-radius: 8px;
+  border: 2px solid #333;
+  box-sizing: border-box;
+  color: white;
+  font-weight: bold;
+  text-align: center;
+  line-height: 52px;
+  font-size: 16px;
+}}
 
-    right_index = routes.index("R")
-    wait_frames = 70 if not can_turn_right else 0
+.car-blue {{
+  background: #1f77b4;
+}}
 
-    for step in range(total_steps):
-        fig, ax = plt.subplots(figsize=(6, 6))
-        draw_road(ax)
+.car-red {{
+  background: #d62728;
+}}
 
-        # 対向車線の車
-        opp_count = 6 if not can_turn_right else 3
+.car-green {{
+  background: #2ca02c;
+}}
 
-        for j in range(opp_count):
-            p_opp = (step - j * 42) / 180
-            if 0 <= p_opp <= 1:
-                p_opp = smoothstep(p_opp)
-                x_opp = 0.45
-                y_opp = 5.4 - 10.8 * p_opp
-                draw_car(ax, x_opp, y_opp, "down", colors["O"])
+.car-purple {{
+  background: #9467bd;
+}}
 
-        for i, route in enumerate(routes):
-            base_start = i * start_gap
+.car-horizontal {{
+  width: 56px;
+  height: 32px;
+  line-height: 28px;
+}}
 
-            # 右折車より後ろの車は、右折待ち分だけ発進が遅れる
-            if i > right_index:
-                base_start += wait_frames
+.note {{
+  position: absolute;
+  left: 24px;
+  bottom: 20px;
+  font-size: 14px;
+  color: #333;
+  background: rgba(255,255,255,0.85);
+  padding: 8px 12px;
+  border-radius: 8px;
+}}
 
-            # 右折車が右折できない場合
-            if i == right_index and not can_turn_right:
-                stop_start = base_start + 50
-                stop_end = stop_start + wait_frames
+@keyframes straight {{
+  0%   {{ left: 326px; top: 760px; transform: rotate(0deg); }}
+  100% {{ left: 326px; top: -80px; transform: rotate(0deg); }}
+}}
 
-                if step < base_start:
-                    continue
+@keyframes leftTurn {{
+  0%   {{ left: 326px; top: 760px; transform: rotate(0deg); }}
+  55%  {{ left: 326px; top: 350px; transform: rotate(0deg); }}
+  70%  {{ left: 250px; top: 350px; transform: rotate(-90deg); }}
+  100% {{ left: -80px; top: 350px; transform: rotate(-90deg); }}
+}}
 
-                # 交差点手前まで進む
-                elif base_start <= step < stop_start:
-                    p = (step - base_start) / move_duration
-                    p = min(p, 0.52)
-                    x, y, d = route_position("R", p)
-                    draw_car(ax, x, y, d, colors["R"], "R")
+@keyframes rightTurnSafe {{
+  0%   {{ left: 326px; top: 760px; transform: rotate(0deg); }}
+  55%  {{ left: 326px; top: 330px; transform: rotate(0deg); }}
+  70%  {{ left: 395px; top: 330px; transform: rotate(90deg); }}
+  100% {{ left: 760px; top: 330px; transform: rotate(90deg); }}
+}}
 
-                # 一時停止
-                elif stop_start <= step < stop_end:
-                    x, y, d = -0.45, -1.25, "up"
-                    draw_car(ax, x, y, d, colors["R"], "R")
+@keyframes rightTurnWait {{
+  0%   {{ left: 326px; top: 760px; transform: rotate(0deg); }}
+  35%  {{ left: 326px; top: 430px; transform: rotate(0deg); }}
+  58%  {{ left: 326px; top: 430px; transform: rotate(0deg); }}
+  72%  {{ left: 395px; top: 330px; transform: rotate(90deg); }}
+  100% {{ left: 760px; top: 330px; transform: rotate(90deg); }}
+}}
 
-                # 対向車が離れた後に右折
-                else:
-                    p = 0.52 + (step - stop_end) / 90 * 0.48
-                    if p <= 1:
-                        x, y, d = route_position("R", p)
-                        draw_car(ax, x, y, d, colors["R"], "R")
+@keyframes queueCar1 {{
+  0%   {{ left: 326px; top: 860px; transform: rotate(0deg); }}
+  35%  {{ left: 326px; top: 500px; transform: rotate(0deg); }}
+  58%  {{ left: 326px; top: 500px; transform: rotate(0deg); }}
+  100% {{ left: 326px; top: -80px; transform: rotate(0deg); }}
+}}
 
-            else:
-                p = (step - base_start) / move_duration
+@keyframes queueCar2 {{
+  0%   {{ left: 326px; top: 940px; transform: rotate(0deg); }}
+  35%  {{ left: 326px; top: 570px; transform: rotate(0deg); }}
+  58%  {{ left: 326px; top: 570px; transform: rotate(0deg); }}
+  70%  {{ left: 326px; top: 350px; transform: rotate(0deg); }}
+  85%  {{ left: 250px; top: 350px; transform: rotate(-90deg); }}
+  100% {{ left: -80px; top: 350px; transform: rotate(-90deg); }}
+}}
 
-                if 0 <= p <= 1:
-                    x, y, d = route_position(route, p)
+@keyframes queueCar3 {{
+  0%   {{ left: 326px; top: 1020px; transform: rotate(0deg); }}
+  35%  {{ left: 326px; top: 640px; transform: rotate(0deg); }}
+  58%  {{ left: 326px; top: 640px; transform: rotate(0deg); }}
+  70%  {{ left: 326px; top: 350px; transform: rotate(0deg); }}
+  85%  {{ left: 250px; top: 350px; transform: rotate(-90deg); }}
+  100% {{ left: -80px; top: 350px; transform: rotate(-90deg); }}
+}}
 
-                    # 右折車が停止している間、後続車も同じ車線上で停止
-                    if not can_turn_right and i > right_index:
-                        stop_start = right_index * start_gap + 50
-                        stop_end = stop_start + wait_frames
+@keyframes opposite {{
+  0%   {{ left: 365px; top: -80px; transform: rotate(180deg); }}
+  100% {{ left: 365px; top: 760px; transform: rotate(180deg); }}
+}}
 
-                        if stop_start <= step < stop_end:
-                            queue_order = i - right_index
-                            x = -0.45
-                            y = -1.25 - queue_order * 0.78
-                            d = "up"
+.anim {{
+  animation-duration: 12s;
+  animation-timing-function: ease-in-out;
+  animation-fill-mode: forwards;
+}}
 
-                    label = route if route in ["R", "L"] else None
-                    draw_car(ax, x, y, d, colors[route], label)
+.straight1 {{ animation-name: straight; animation-delay: 0s; }}
+.straight2 {{ animation-name: straight; animation-delay: 1.0s; }}
+.straight3 {{ animation-name: straight; animation-delay: 2.0s; }}
 
-        ax.set_title("Straight : Right : Left = 7 : 1 : 2", fontsize=12)
+.right-safe {{ animation-name: rightTurnSafe; animation-delay: 3.0s; }}
+.right-wait {{ animation-name: rightTurnWait; animation-delay: 3.0s; }}
 
-        placeholder.pyplot(fig)
-        plt.close(fig)
+.queue1 {{ animation-name: queueCar1; animation-delay: 3.8s; }}
+.queue2 {{ animation-name: queueCar2; animation-delay: 4.2s; }}
+.queue3 {{ animation-name: queueCar3; animation-delay: 4.6s; }}
 
-        time.sleep(frame_sleep)
+.straight-after1 {{ animation-name: straight; animation-delay: 10.0s; }}
+.straight-after2 {{ animation-name: straight; animation-delay: 11.0s; }}
+.straight-after3 {{ animation-name: straight; animation-delay: 12.0s; }}
+.straight-after4 {{ animation-name: straight; animation-delay: 13.0s; }}
 
+.opp1 {{ animation-name: opposite; animation-delay: 0s; }}
+.opp2 {{ animation-name: opposite; animation-delay: 2.0s; }}
+.opp3 {{ animation-name: opposite; animation-delay: 4.0s; }}
+.opp4 {{ animation-name: opposite; animation-delay: 6.0s; }}
+.opp5 {{ animation-name: opposite; animation-delay: 8.0s; }}
 
-if st.button("交差点の動きを表示"):
-    draw_animation(can_turn_right)
+</style>
+</head>
+
+<body>
+<div class="scene">
+  <div class="road-v"></div>
+  <div class="road-h"></div>
+
+  <div class="line-v1"></div>
+  <div class="line-v2"></div>
+  <div class="line-h1"></div>
+  <div class="line-h2"></div>
+
+  <div class="center-line-v"></div>
+  <div class="center-line-h"></div>
+
+  <div class="crosswalk-v-top">
+    <div class="stripe-v" style="left:0px;"></div>
+    <div class="stripe-v" style="left:32px;"></div>
+    <div class="stripe-v" style="left:64px;"></div>
+    <div class="stripe-v" style="left:96px;"></div>
+    <div class="stripe-v" style="left:128px;"></div>
+  </div>
+
+  <div class="crosswalk-v-bottom">
+    <div class="stripe-v" style="left:0px;"></div>
+    <div class="stripe-v" style="left:32px;"></div>
+    <div class="stripe-v" style="left:64px;"></div>
+    <div class="stripe-v" style="left:96px;"></div>
+    <div class="stripe-v" style="left:128px;"></div>
+  </div>
+
+  <div class="crosswalk-h-left">
+    <div class="stripe-h" style="top:0px;"></div>
+    <div class="stripe-h" style="top:32px;"></div>
+    <div class="stripe-h" style="top:64px;"></div>
+    <div class="stripe-h" style="top:96px;"></div>
+    <div class="stripe-h" style="top:128px;"></div>
+  </div>
+
+  <div class="crosswalk-h-right">
+    <div class="stripe-h" style="top:0px;"></div>
+    <div class="stripe-h" style="top:32px;"></div>
+    <div class="stripe-h" style="top:64px;"></div>
+    <div class="stripe-h" style="top:96px;"></div>
+    <div class="stripe-h" style="top:128px;"></div>
+  </div>
+
+  <div class="signal">
+    <div class="light red"></div>
+    <div class="light"></div>
+    <div class="light green"></div>
+  </div>
+
+  <div class="opposite-signal">
+    <div class="light opp-red"></div>
+    <div class="light"></div>
+    <div class="light"></div>
+  </div>
+
+  <div class="car car-blue anim straight1"></div>
+  <div class="car car-blue anim straight2"></div>
+  <div class="car car-blue anim straight3"></div>
+
+  {"<div class='car car-red anim right-safe'>R</div>" if animation_mode == "safe" else "<div class='car car-red anim right-wait'>R</div>"}
+
+  {"<div class='car car-blue anim queue1'></div><div class='car car-green anim queue2'>L</div><div class='car car-green anim queue3'>L</div>" if animation_mode == "wait" else "<div class='car car-green anim queue2'>L</div><div class='car car-green anim queue3'>L</div>"}
+
+  <div class="car car-blue anim straight-after1"></div>
+  <div class="car car-blue anim straight-after2"></div>
+  <div class="car car-blue anim straight-after3"></div>
+  <div class="car car-blue anim straight-after4"></div>
+
+  {"<div class='car car-purple anim opp1'></div><div class='car car-purple anim opp2'></div><div class='car car-purple anim opp3'></div><div class='car car-purple anim opp4'></div><div class='car car-purple anim opp5'></div>" if animation_mode == "wait" else "<div class='car car-purple anim opp1'></div><div class='car car-purple anim opp3'></div>"}
+
+  <div class="note">
+    片側1車線：右折車が停止すると後続車も停止する
+  </div>
+</div>
+</body>
+</html>
+"""
+
+components.html(html_code, height=760)
