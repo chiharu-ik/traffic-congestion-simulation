@@ -1,7 +1,7 @@
 import streamlit as st
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.patches import Rectangle
+from matplotlib.patches import Rectangle, FancyBboxPatch
 import time
 
 st.set_page_config(page_title="渋滞シミュレーション", layout="wide")
@@ -284,163 +284,205 @@ r4.metric("渋滞率", f"{jam_rate * 100:.1f}%")
 # 9. 交差点アニメーション
 # =========================
 
-def draw_car(ax, x, y, color, direction="up", label=None):
-    if direction == "up":
-        width, height = 0.45, 0.9
-    elif direction == "down":
-        width, height = 0.45, 0.9
-    else:
-        width, height = 0.9, 0.45
-
-    car = Rectangle(
-        (x - width / 2, y - height / 2),
-        width,
-        height,
-        facecolor=color,
-        edgecolor="black",
-        linewidth=1.0
-    )
-
-    ax.add_patch(car)
-
-    if label is not None:
-        ax.text(x, y + 0.7, label, ha="center", va="center", fontsize=8)
-
-
-def draw_road_base(ax):
-    ax.set_facecolor("#f4f4f4")
-
-    # 道路
-    ax.add_patch(Rectangle((-2.5, -10), 5.0, 20, color="#777777"))
-    ax.add_patch(Rectangle((-10, -2.5), 20, 5.0, color="#777777"))
-
-    # 交差点中央
-    ax.add_patch(Rectangle((-2.5, -2.5), 5.0, 5.0, color="#777777"))
-
-    # 車線中央線
-    ax.plot([0, 0], [-10, -3.0], color="white", linestyle="--", linewidth=1.2)
-    ax.plot([0, 0], [3.0, 10], color="white", linestyle="--", linewidth=1.2)
-    ax.plot([-10, -3.0], [0, 0], color="white", linestyle="--", linewidth=1.2)
-    ax.plot([3.0, 10], [0, 0], color="white", linestyle="--", linewidth=1.2)
-
-    # 停止線
-    ax.plot([-2.3, 2.3], [-3.4, -3.4], color="white", linewidth=3)
-    ax.plot([-2.3, 2.3], [3.4, 3.4], color="white", linewidth=3)
-
-    # 20m手前の減速開始位置
-    ax.plot([-2.3, 2.3], [-7.2, -7.2], color="orange", linewidth=3)
-    ax.text(2.8, -7.2, "20m", fontsize=9, va="center")
-
-    ax.set_xlim(-10, 10)
-    ax.set_ylim(-10, 10)
+def draw_road(ax):
+    ax.set_xlim(-6, 6)
+    ax.set_ylim(-6, 6)
     ax.set_aspect("equal")
     ax.axis("off")
+    ax.set_facecolor("white")
+
+    # 角丸の背景
+    bg = FancyBboxPatch(
+        (-5.8, -5.8),
+        11.6,
+        11.6,
+        boxstyle="round,pad=0.0,rounding_size=0.8",
+        facecolor="#f7f7f7",
+        edgecolor="none"
+    )
+    ax.add_patch(bg)
+
+    road_color = "#d9d9d9"
+    line_color = "#6b3f1d"
+
+    # 道路
+    ax.add_patch(Rectangle((-1.2, -6), 2.4, 12, facecolor=road_color, edgecolor="none"))
+    ax.add_patch(Rectangle((-6, -1.2), 12, 2.4, facecolor=road_color, edgecolor="none"))
+
+    # 道路の外枠線
+    ax.plot([-1.2, -1.2], [-6, -1.2], color=line_color, linewidth=1.5)
+    ax.plot([1.2, 1.2], [-6, -1.2], color=line_color, linewidth=1.5)
+    ax.plot([-1.2, -1.2], [1.2, 6], color=line_color, linewidth=1.5)
+    ax.plot([1.2, 1.2], [1.2, 6], color=line_color, linewidth=1.5)
+
+    ax.plot([-6, -1.2], [1.2, 1.2], color=line_color, linewidth=1.5)
+    ax.plot([-6, -1.2], [-1.2, -1.2], color=line_color, linewidth=1.5)
+    ax.plot([1.2, 6], [1.2, 1.2], color=line_color, linewidth=1.5)
+    ax.plot([1.2, 6], [-1.2, -1.2], color=line_color, linewidth=1.5)
+
+    # 中央線
+    ax.plot([0, 0], [-6, -1.5], color=line_color, linestyle=(0, (5, 5)), linewidth=1.3)
+    ax.plot([0, 0], [1.5, 6], color=line_color, linestyle=(0, (5, 5)), linewidth=1.3)
+    ax.plot([-6, -1.5], [0, 0], color=line_color, linestyle=(0, (5, 5)), linewidth=1.3)
+    ax.plot([1.5, 6], [0, 0], color=line_color, linestyle=(0, (5, 5)), linewidth=1.3)
+
+    # 横断歩道
+    cross_color = "white"
+
+    # 下側
+    for x in [-0.75, -0.35, 0.05, 0.45, 0.85]:
+        ax.add_patch(Rectangle((x, -2.0), 0.18, 1.0, facecolor=cross_color, edgecolor="none"))
+
+    # 上側
+    for x in [-0.75, -0.35, 0.05, 0.45, 0.85]:
+        ax.add_patch(Rectangle((x, 1.0), 0.18, 1.0, facecolor=cross_color, edgecolor="none"))
+
+    # 左側
+    for y in [-0.85, -0.45, -0.05, 0.35, 0.75]:
+        ax.add_patch(Rectangle((-2.0, y), 1.0, 0.18, facecolor=cross_color, edgecolor="none"))
+
+    # 右側
+    for y in [-0.85, -0.45, -0.05, 0.35, 0.75]:
+        ax.add_patch(Rectangle((1.0, y), 1.0, 0.18, facecolor=cross_color, edgecolor="none"))
 
 
-def get_straight_position(p):
-    x = -0.8
-    y = -9.0 + 18.0 * p
+def draw_car(ax, x, y, direction, color, label=None):
+    if direction in ["up", "down"]:
+        w, h = 0.35, 0.65
+    else:
+        w, h = 0.65, 0.35
+
+    car = FancyBboxPatch(
+        (x - w / 2, y - h / 2),
+        w,
+        h,
+        boxstyle="round,pad=0.02,rounding_size=0.06",
+        facecolor=color,
+        edgecolor="#333333",
+        linewidth=0.8
+    )
+    ax.add_patch(car)
+
+    if label:
+        ax.text(x, y, label, color="white", ha="center", va="center", fontsize=7)
+
+
+def straight_position(p):
+    x = -0.45
+    y = -5.3 + 10.6 * p
     return x, y, "up"
 
 
-def get_left_position(p):
+def left_position(p):
     if p < 0.55:
-        x = 0.8
-        y = -9.0 + 8.5 * (p / 0.55)
+        x = -0.45
+        y = -5.3 + 4.9 * (p / 0.55)
         direction = "up"
     else:
         q = (p - 0.55) / 0.45
-        x = 0.8 - 8.8 * q
-        y = -0.8
+        x = -0.45 - 4.8 * q
+        y = -0.45
         direction = "left"
+
     return x, y, direction
 
 
-def get_right_position(p, can_turn_right):
+def right_position(p, can_turn_right):
     if can_turn_right:
         if p < 0.55:
-            x = 0.2
-            y = -9.0 + 8.5 * (p / 0.55)
+            x = -0.45
+            y = -5.3 + 5.1 * (p / 0.55)
             direction = "up"
         else:
             q = (p - 0.55) / 0.45
-            x = 0.2 + 8.8 * q
-            y = 0.8
+            x = -0.45 + 5.0 * q
+            y = 0.45
             direction = "right"
     else:
         if p < 0.35:
-            x = 0.2
-            y = -9.0 + 5.6 * (p / 0.35)
+            x = -0.45
+            y = -5.3 + 3.7 * (p / 0.35)
             direction = "up"
         elif p < 0.60:
-            x = 0.2
-            y = -3.4
+            x = -0.45
+            y = -1.6
             direction = "up"
         else:
             q = (p - 0.60) / 0.40
 
             if q < 0.45:
-                x = 0.2
-                y = -3.4 + 4.2 * (q / 0.45)
+                x = -0.45
+                y = -1.6 + 2.1 * (q / 0.45)
                 direction = "up"
             else:
                 r = (q - 0.45) / 0.55
-                x = 0.2 + 8.8 * r
-                y = 0.8
+                x = -0.45 + 5.0 * r
+                y = 0.45
                 direction = "right"
 
     return x, y, direction
 
 
-def draw_intersection_animation(can_turn_right):
-    st.subheader("交差点内の車両の動き")
+def opposite_position(p):
+    x = 0.45
+    y = 5.3 - 10.6 * p
+    return x, y, "down"
+
+
+def draw_animation(can_turn_right):
+    st.subheader("交差点アニメーション")
+
+    st.write("表示は、直進7台・右折1台・左折2台で固定しています。")
 
     placeholder = st.empty()
+    total_steps = 150
 
-    total_steps = 140
+    colors = {
+        "straight": "#1f77b4",
+        "right": "#d62728",
+        "left": "#2ca02c",
+        "opposite": "#9467bd",
+    }
 
     for step in range(total_steps):
-        fig, ax = plt.subplots(figsize=(6.5, 6.5))
-        draw_road_base(ax)
+        fig, ax = plt.subplots(figsize=(6, 6))
+        draw_road(ax)
 
         p_all = step / (total_steps - 1)
 
         # 直進7台
         for i in range(7):
-            p = p_all - i * 0.10
+            p = p_all - i * 0.08
             if 0 <= p <= 1:
-                x, y, direction = get_straight_position(p)
-                draw_car(ax, x, y, "#1f77b4", direction)
+                x, y, d = straight_position(p)
+                draw_car(ax, x, y, d, colors["straight"])
 
         # 右折1台
         p = p_all - 0.18
         if 0 <= p <= 1:
-            x, y, direction = get_right_position(p, can_turn_right)
-            draw_car(ax, x, y, "#d62728", direction, "R")
+            x, y, d = right_position(p, can_turn_right)
+            draw_car(ax, x, y, d, colors["right"], "R")
 
         # 左折2台
         for i in range(2):
-            p = p_all - 0.34 - i * 0.12
+            p = p_all - 0.34 - i * 0.10
             if 0 <= p <= 1:
-                x, y, direction = get_left_position(p)
-                draw_car(ax, x, y, "#2ca02c", direction, "L" if i == 0 else None)
+                x, y, d = left_position(p)
+                draw_car(ax, x, y, d, colors["left"], "L" if i == 0 else None)
 
         # 対向車
         if not can_turn_right:
             p = p_all
-            x = 0.8
-            y = 8.5 - 10.5 * p
-            draw_car(ax, x, y, "#9467bd", "down", "opposite")
+            if 0 <= p <= 1:
+                x, y, d = opposite_position(p)
+                draw_car(ax, x, y, d, colors["opposite"], "対")
 
-        ax.set_title("Straight : Right : Left = 7 : 1 : 2", fontsize=13)
+        ax.set_title("Straight : Right : Left = 7 : 1 : 2", fontsize=12)
 
         placeholder.pyplot(fig)
         plt.close(fig)
-
         time.sleep(0.04)
 
 
-st.subheader("交差点アニメーション")
-
 if st.button("交差点の動きを表示"):
-    draw_intersection_animation(can_turn_right)
+    draw_animation(can_turn_right)
