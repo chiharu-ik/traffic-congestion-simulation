@@ -1,6 +1,7 @@
 import streamlit as st
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.patches import Rectangle
 import time
 
 st.set_page_config(page_title="渋滞シミュレーション", layout="wide")
@@ -280,95 +281,55 @@ r3.metric("サイクル長 C", f"{C_min:.2f} 分")
 r4.metric("渋滞率", f"{jam_rate * 100:.1f}%")
 
 # =========================
-# 9. グラフ
+# 9. 交差点アニメーション
 # =========================
 
-st.subheader("車両数 N と通過時間 T の関係")
+def draw_car(ax, x, y, color, direction="up", label=None):
+    if direction == "up":
+        width, height = 0.45, 0.9
+    elif direction == "down":
+        width, height = 0.45, 0.9
+    else:
+        width, height = 0.9, 0.45
 
-max_N = max(120, N + 30)
-N_values = np.arange(1, max_N + 1)
-T_values = []
-
-total = max(N, 1)
-
-bike_ratio = Nb / total
-car_ratio = Nc / total
-large_ratio = Nl / total
-
-for n in N_values:
-    nb = round(n * bike_ratio)
-    nc = round(n * car_ratio)
-    nl = n - nb - nc
-
-    n_straight = round(n * STRAIGHT_RATIO)
-    n_right = round(n * RIGHT_RATIO)
-    n_left = n - n_straight - n_right
-
-    T_values.append(
-        calculate_T_sec(
-            nb,
-            nc,
-            nl,
-            last_vehicle,
-            n_left,
-            n_right,
-            right_turn_wait,
-            0
-        ) / 60
-    )
-
-fig, ax = plt.subplots(figsize=(10, 6))
-
-ax.plot(N_values, T_values, linewidth=2, label="Passing Time T")
-ax.axhline(C_min, linestyle="--", linewidth=2, label="Cycle Length C")
-
-ax.set_xlabel("Number of Vehicles N")
-ax.set_ylabel("Passing Time T (min)")
-ax.set_title("Relationship between N and Passing Time T")
-ax.grid(True)
-ax.legend()
-
-st.pyplot(fig)
-
-# =========================
-# 10. 交差点アニメーション
-# =========================
-
-def draw_car(ax, x, y, color, label=None):
-    car = plt.Rectangle(
-        (x - 0.25, y - 0.45),
-        0.5,
-        0.9,
+    car = Rectangle(
+        (x - width / 2, y - height / 2),
+        width,
+        height,
         facecolor=color,
         edgecolor="black",
-        linewidth=0.8
+        linewidth=1.0
     )
+
     ax.add_patch(car)
 
     if label is not None:
-        ax.text(x, y + 0.65, label, ha="center", fontsize=8)
+        ax.text(x, y + 0.7, label, ha="center", va="center", fontsize=8)
 
 
 def draw_road_base(ax):
-    ax.set_facecolor("#f5f5f5")
+    ax.set_facecolor("#f4f4f4")
 
     # 道路
-    ax.add_patch(plt.Rectangle((-2.2, -10), 4.4, 20, color="#777777"))
-    ax.add_patch(plt.Rectangle((-10, -2.2), 20, 4.4, color="#777777"))
+    ax.add_patch(Rectangle((-2.5, -10), 5.0, 20, color="#777777"))
+    ax.add_patch(Rectangle((-10, -2.5), 20, 5.0, color="#777777"))
 
-    # 車線の中心線
-    ax.plot([0, 0], [-10, -2.4], color="white", linestyle="--", linewidth=1)
-    ax.plot([0, 0], [2.4, 10], color="white", linestyle="--", linewidth=1)
-    ax.plot([-10, -2.4], [0, 0], color="white", linestyle="--", linewidth=1)
-    ax.plot([2.4, 10], [0, 0], color="white", linestyle="--", linewidth=1)
+    # 交差点中央
+    ax.add_patch(Rectangle((-2.5, -2.5), 5.0, 5.0, color="#777777"))
+
+    # 車線中央線
+    ax.plot([0, 0], [-10, -3.0], color="white", linestyle="--", linewidth=1.2)
+    ax.plot([0, 0], [3.0, 10], color="white", linestyle="--", linewidth=1.2)
+    ax.plot([-10, -3.0], [0, 0], color="white", linestyle="--", linewidth=1.2)
+    ax.plot([3.0, 10], [0, 0], color="white", linestyle="--", linewidth=1.2)
 
     # 停止線
-    ax.plot([-2.0, 2.0], [-3.2, -3.2], color="white", linewidth=3)
-    ax.plot([-2.0, 2.0], [3.2, 3.2], color="white", linewidth=3)
+    ax.plot([-2.3, 2.3], [-3.4, -3.4], color="white", linewidth=3)
+    ax.plot([-2.3, 2.3], [3.4, 3.4], color="white", linewidth=3)
 
     # 20m手前の減速開始位置
-    ax.plot([-2.0, 2.0], [-7.0, -7.0], color="orange", linewidth=3)
-    ax.text(2.4, -7.1, "20m before", fontsize=8, va="center")
+    ax.plot([-2.3, 2.3], [-7.2, -7.2], color="orange", linewidth=3)
+    ax.text(2.8, -7.2, "20m", fontsize=9, va="center")
 
     ax.set_xlim(-10, 10)
     ax.set_ylim(-10, 10)
@@ -376,91 +337,102 @@ def draw_road_base(ax):
     ax.axis("off")
 
 
-def draw_intersection_animation(N_straight, N_right, N_left, can_turn_right):
+def get_straight_position(p):
+    x = -0.8
+    y = -9.0 + 18.0 * p
+    return x, y, "up"
+
+
+def get_left_position(p):
+    if p < 0.55:
+        x = 0.8
+        y = -9.0 + 8.5 * (p / 0.55)
+        direction = "up"
+    else:
+        q = (p - 0.55) / 0.45
+        x = 0.8 - 8.8 * q
+        y = -0.8
+        direction = "left"
+    return x, y, direction
+
+
+def get_right_position(p, can_turn_right):
+    if can_turn_right:
+        if p < 0.55:
+            x = 0.2
+            y = -9.0 + 8.5 * (p / 0.55)
+            direction = "up"
+        else:
+            q = (p - 0.55) / 0.45
+            x = 0.2 + 8.8 * q
+            y = 0.8
+            direction = "right"
+    else:
+        if p < 0.35:
+            x = 0.2
+            y = -9.0 + 5.6 * (p / 0.35)
+            direction = "up"
+        elif p < 0.60:
+            x = 0.2
+            y = -3.4
+            direction = "up"
+        else:
+            q = (p - 0.60) / 0.40
+
+            if q < 0.45:
+                x = 0.2
+                y = -3.4 + 4.2 * (q / 0.45)
+                direction = "up"
+            else:
+                r = (q - 0.45) / 0.55
+                x = 0.2 + 8.8 * r
+                y = 0.8
+                direction = "right"
+
+    return x, y, direction
+
+
+def draw_intersection_animation(can_turn_right):
     st.subheader("交差点内の車両の動き")
 
     placeholder = st.empty()
 
-    # 表示は直進7台・右折1台・左折2台に固定
-    show_straight = 7
-    show_right = 1
-    show_left = 2
-
-    total_steps = 120
+    total_steps = 140
 
     for step in range(total_steps):
-        fig, ax = plt.subplots(figsize=(6, 6))
+        fig, ax = plt.subplots(figsize=(6.5, 6.5))
         draw_road_base(ax)
 
         p_all = step / (total_steps - 1)
 
-        # 直進車：下から上へ
-        for i in range(show_straight):
-            p = p_all - i * 0.08
-
+        # 直進7台
+        for i in range(7):
+            p = p_all - i * 0.10
             if 0 <= p <= 1:
-                x = -0.8
-                y = -9 + 18 * p
-                draw_car(ax, x, y, "#1f77b4")
+                x, y, direction = get_straight_position(p)
+                draw_car(ax, x, y, "#1f77b4", direction)
 
-        # 右折車：下から右へ
-        for i in range(show_right):
-            p = p_all - 0.20
+        # 右折1台
+        p = p_all - 0.18
+        if 0 <= p <= 1:
+            x, y, direction = get_right_position(p, can_turn_right)
+            draw_car(ax, x, y, "#d62728", direction, "R")
 
+        # 左折2台
+        for i in range(2):
+            p = p_all - 0.34 - i * 0.12
             if 0 <= p <= 1:
-                if not can_turn_right:
-                    # 右折不可の場合：一度停止してから右折
-                    if p < 0.35:
-                        x = 0.2
-                        y = -9 + 6.0 * (p / 0.35)
-                    elif p < 0.60:
-                        x = 0.2
-                        y = -3.0
-                    else:
-                        q = (p - 0.60) / 0.40
+                x, y, direction = get_left_position(p)
+                draw_car(ax, x, y, "#2ca02c", direction, "L" if i == 0 else None)
 
-                        if q < 0.45:
-                            x = 0.2
-                            y = -3.0 + 3.0 * (q / 0.45)
-                        else:
-                            r = (q - 0.45) / 0.55
-                            x = 0.2 + 8.5 * r
-                            y = 0.6
-                else:
-                    # 右折可能の場合：そのまま右折
-                    if p < 0.55:
-                        x = 0.2
-                        y = -9 + 8.5 * (p / 0.55)
-                    else:
-                        q = (p - 0.55) / 0.45
-                        x = 0.2 + 8.5 * q
-                        y = 0.6
-
-                draw_car(ax, x, y, "#d62728", "R")
-
-        # 左折車：下から左へ
-        for i in range(show_left):
-            p = p_all - 0.35 - i * 0.10
-
-            if 0 <= p <= 1:
-                if p < 0.55:
-                    x = 0.8
-                    y = -9 + 8.5 * (p / 0.55)
-                else:
-                    q = (p - 0.55) / 0.45
-                    x = 0.8 - 8.5 * q
-                    y = -0.5
-
-                draw_car(ax, x, y, "#2ca02c", "L" if i == 0 else None)
-
-        # 対向車：右折不可の場合だけ表示
+        # 対向車
         if not can_turn_right:
             p = p_all
             x = 0.8
-            y = 9 - 8 * p
-            draw_car(ax, x, y, "#9467bd", "opposite")
+            y = 8.5 - 10.5 * p
+            draw_car(ax, x, y, "#9467bd", "down", "opposite")
 
-        ax.set_title("Straight : Right : Left = 7 : 1 : 2", fontsize=12)
+        ax.set_title("Straight : Right : Left = 7 : 1 : 2", fontsize=13)
 
         placeholder.pyplot(fig)
         plt.close(fig)
@@ -471,9 +443,4 @@ def draw_intersection_animation(N_straight, N_right, N_left, can_turn_right):
 st.subheader("交差点アニメーション")
 
 if st.button("交差点の動きを表示"):
-    draw_intersection_animation(
-        N_straight,
-        N_right,
-        N_left,
-        can_turn_right
-    )
+    draw_intersection_animation(can_turn_right)
