@@ -1,6 +1,7 @@
 import streamlit as st
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 
 st.set_page_config(page_title="渋滞シミュレーション", layout="wide")
 st.title("🚗 渋滞シミュレーション")
@@ -42,17 +43,17 @@ traffic_volume = traffic_table[day_type][time_zone]
 YELLOW = 5
 RED = 40
 L_clearance = YELLOW + RED
-
 MAX_CAPACITY = 30
 
-def calc_signal_cycle(traffic_volume):
-    demand_rate = traffic_volume / MAX_CAPACITY
+def calc_signal_cycle(q):
+    demand_rate = q / MAX_CAPACITY
 
     if demand_rate >= 1:
         demand_rate = 0.95
 
     C_sec = (1.5 * L_clearance + 5) / (1 - demand_rate)
     C_min = C_sec / 60
+
     GREEN_sec = C_sec - L_clearance
     GREEN_min = GREEN_sec / 60
 
@@ -128,7 +129,7 @@ D = 10.0
 t0 = 2.0
 
 # =========================
-# 5. 直進・右折・左折の固定割合
+# 5. 直進・右折・左折
 # =========================
 
 st.subheader("直進・右折・左折の割合")
@@ -156,32 +157,27 @@ st.subheader("右折・左折条件")
 
 DECELERATION_DISTANCE = 20.0
 RIGHT_TURN_SAFE_DISTANCE = 50.0
+OPPOSITE_SPEED = 10.0
 
 st.write("左折車・右折車は、交差点の20m手前から減速するものとする。")
 st.write("右折車は、対向車が信号から50m以上離れている場合に右折可能とする。")
+st.write("右折条件の基準値：50m、対向車が離れていく速度：10m/s")
 
 opposite_distance = st.slider(
-    "対向車が信号から離れている距離（m）",
+    "シミュレーション上の対向車距離（m）",
     0,
     100,
     40
 )
 
-opposite_speed = st.slider(
-    "対向車が離れていく速度（m/s）",
-    1.0,
-    20.0,
-    10.0
-)
-
-def calc_right_turn_wait(opposite_distance, opposite_speed):
-    if opposite_distance >= RIGHT_TURN_SAFE_DISTANCE:
+def calc_right_turn_wait(distance):
+    if distance >= RIGHT_TURN_SAFE_DISTANCE:
         return 0.0, True
     else:
-        wait = (RIGHT_TURN_SAFE_DISTANCE - opposite_distance) / opposite_speed
+        wait = (RIGHT_TURN_SAFE_DISTANCE - distance) / OPPOSITE_SPEED
         return wait, False
 
-right_turn_wait, can_turn_right = calc_right_turn_wait(opposite_distance, opposite_speed)
+right_turn_wait, can_turn_right = calc_right_turn_wait(opposite_distance)
 
 if can_turn_right:
     st.success("右折可能：対向車が50m以上離れています。")
@@ -194,40 +190,39 @@ else:
 
 trials = st.slider("試行回数", 100, 5000, 1000)
 
-def calculate_move_time(Nb, Nc, Nl, last_vehicle):
+def calculate_move_time(nb, nc, nl, last_vehicle_type):
     x = (
-        Nb * (L["bike"] + G["bike"])
-        + Nc * (L["car"] + G["car"])
-        + Nl * (L["large"] + G["large"])
+        nb * (L["bike"] + G["bike"])
+        + nc * (L["car"] + G["car"])
+        + nl * (L["large"] + G["large"])
         + D
-        + L[last_vehicle]
+        + L[last_vehicle_type]
     )
 
-    move_time = np.sqrt(2 * x / A[last_vehicle])
+    move_time = np.sqrt(2 * x / A[last_vehicle_type])
     return move_time
 
-
-def calculate_phase_times(Nb, Nc, Nl, last_vehicle, N_left, N_right, right_turn_wait):
+def calculate_phase_times(nb, nc, nl, last_vehicle_type, n_left, n_right, right_wait):
     reaction_time = t0
 
     queue_time = (
-        Nb * H["bike"]
-        + Nc * H["car"]
-        + Nl * H["large"]
+        nb * H["bike"]
+        + nc * H["car"]
+        + nl * H["large"]
     )
 
-    move_time = calculate_move_time(Nb, Nc, Nl, last_vehicle)
+    move_time = calculate_move_time(nb, nc, nl, last_vehicle_type)
 
-    turn_speed = TURN_SPEED[last_vehicle]
+    turn_speed = TURN_SPEED[last_vehicle_type]
 
     left_turn_time = 0.0
     right_turn_time = 0.0
 
-    if N_left > 0:
+    if n_left > 0:
         left_turn_time = DECELERATION_DISTANCE / turn_speed
 
-    if N_right > 0:
-        right_turn_time = DECELERATION_DISTANCE / turn_speed + right_turn_wait
+    if n_right > 0:
+        right_turn_time = DECELERATION_DISTANCE / turn_speed + right_wait
 
     total_without_error = (
         reaction_time
@@ -238,39 +233,71 @@ def calculate_phase_times(Nb, Nc, Nl, last_vehicle, N_left, N_right, right_turn_
     )
 
     return {
-        "反応時間": reaction_time,
-        "発進待ち時間": queue_time,
-        "移動時間": move_time,
-        "左折による減速時間": left_turn_time,
-        "右折による待ち・減速時間": right_turn_time,
-        "合計": total_without_error
+        "reaction_time": reaction_time,
+        "queue_time": queue_time,
+        "move_time": move_time,
+        "left_turn_time": left_turn_time,
+        "right_turn_time": right_turn_time,
+        "total": total_without_error
     }
 
+def calculate_result(nb, nc, nl, last_vehicle_type, q, opposite_distance_case, trials=1000):
+    n = nb + nc + nl
 
-phase_times = calculate_phase_times(
+    n_straight = round(n * STRAIGHT_RATIO)
+    n_right = round(n * RIGHT_RATIO)
+    n_left = n - n_straight - n_right
+
+    dr, C_s, C_m, G_s, G_m = calc_signal_cycle(q)
+
+    wait, can_turn = calc_right_turn_wait(opposite_distance_case)
+
+    phase = calculate_phase_times(
+        nb,
+        nc,
+        nl,
+        last_vehicle_type,
+        n_left,
+        n_right,
+        wait
+    )
+
+    T_list = []
+    jam_list = []
+
+    for _ in range(trials):
+        epsilon = np.random.uniform(-3, 3)
+        T_sec = phase["total"] + epsilon
+        T_min = T_sec / 60
+        T_list.append(T_min)
+        jam_list.append(T_min > C_m)
+
+    avg_T_min = np.mean(T_list)
+    jam_rate = np.mean(jam_list)
+
+    return {
+        "N": n,
+        "N_straight": n_straight,
+        "N_right": n_right,
+        "N_left": n_left,
+        "demand_rate": dr,
+        "C_min": C_m,
+        "T_min": avg_T_min,
+        "jam_rate": jam_rate,
+        "phase": phase,
+        "right_wait": wait,
+        "can_turn": can_turn
+    }
+
+result = calculate_result(
     Nb,
     Nc,
     Nl,
     last_vehicle,
-    N_left,
-    N_right,
-    right_turn_wait
+    traffic_volume,
+    opposite_distance,
+    trials
 )
-
-T_list_min = []
-jam_list = []
-
-for _ in range(trials):
-    epsilon = np.random.uniform(-3, 3)
-    T_sec = phase_times["合計"] + epsilon
-    T_min = T_sec / 60
-
-    T_list_min.append(T_min)
-    jam_list.append(T_min > C_min)
-
-avg_T_min = np.mean(T_list_min)
-jam_rate = np.mean(jam_list)
-risk_ratio = avg_T_min / C_min
 
 # =========================
 # 8. 結果表示
@@ -280,196 +307,236 @@ st.subheader("シミュレーション結果")
 
 r1, r2, r3, r4 = st.columns(4)
 
-r1.metric("前方車両数 N", N)
-r2.metric("平均通過時間 T", f"{avg_T_min:.2f} 分")
-r3.metric("サイクル長 C", f"{C_min:.2f} 分")
-r4.metric("渋滞率", f"{jam_rate * 100:.1f}%")
+r1.metric("前方車両数 N", result["N"])
+r2.metric("平均通過時間 T", f"{result['T_min']:.2f} 分")
+r3.metric("サイクル長 C", f"{result['C_min']:.2f} 分")
+r4.metric("渋滞率", f"{result['jam_rate'] * 100:.1f}%")
 
-if avg_T_min > C_min:
-    st.error("判定：渋滞が発生しやすい状態です。")
+if result["T_min"] > result["C_min"]:
+    st.error("判定：1回の信号サイクル内で処理しきれない状態です。")
 else:
     st.success("判定：1回の信号サイクル内で処理できる状態です。")
 
 # =========================
-# 9. 渋滞につながりやすい要因
-# =========================
-
-st.subheader("渋滞につながりやすい要因")
-
-factor_rows = []
-
-large_ratio = Nl / N if N > 0 else 0
-right_ratio_actual = N_right / N if N > 0 else 0
-
-if demand_rate >= 0.45:
-    factor_rows.append({
-        "要因": "交通量が多い",
-        "現在の状態": f"需要率 λ = {demand_rate:.2f}",
-        "渋滞につながる理由": "信号1サイクルで処理すべき車両が多くなり、余裕が小さくなるため"
-    })
-
-if N >= 40:
-    factor_rows.append({
-        "要因": "前方車両数が多い",
-        "現在の状態": f"N = {N} 台",
-        "渋滞につながる理由": "発進待ち時間が長くなり、最後尾車両の通過時間が大きくなるため"
-    })
-
-if large_ratio >= 0.25:
-    factor_rows.append({
-        "要因": "大型車の割合が高い",
-        "現在の状態": f"大型車割合 = {large_ratio * 100:.1f}%",
-        "渋滞につながる理由": "大型車は車長・車間距離・発車間隔が大きく、車列全体の通過時間を伸ばすため"
-    })
-
-if right_turn_wait > 0:
-    factor_rows.append({
-        "要因": "右折待ちが発生している",
-        "現在の状態": f"右折待ち時間 = {right_turn_wait:.1f} 秒",
-        "渋滞につながる理由": "片側1車線では右折車が停止すると、後続車も追い越せず待機するため"
-    })
-
-if N_right > 0:
-    factor_rows.append({
-        "要因": "右折車が含まれている",
-        "現在の状態": f"右折車 = {N_right} 台",
-        "渋滞につながる理由": "右折車は対向車の影響を受けるため、直進車より通過時間が不安定になりやすいため"
-    })
-
-if phase_times["発進待ち時間"] >= 60:
-    factor_rows.append({
-        "要因": "発進待ち時間が長い",
-        "現在の状態": f"{phase_times['発進待ち時間']:.1f} 秒",
-        "渋滞につながる理由": "前の車が順番に発進するまで最後尾車両が動けないため"
-    })
-
-if not factor_rows:
-    factor_rows.append({
-        "要因": "大きな渋滞要因は小さい",
-        "現在の状態": "現在の設定では余裕あり",
-        "渋滞につながる理由": "通過時間が信号サイクル長を下回っているため"
-    })
-
-st.dataframe(pd.DataFrame(factor_rows), use_container_width=True)
-
-# =========================
-# 10. 時間の内訳
+# 9. 通過時間の内訳
 # =========================
 
 st.subheader("通過時間の内訳")
 
+phase = result["phase"]
+
 phase_df = pd.DataFrame([
-    {"項目": "反応時間", "時間（秒）": phase_times["反応時間"]},
-    {"項目": "発進待ち時間", "時間（秒）": phase_times["発進待ち時間"]},
-    {"項目": "移動時間", "時間（秒）": phase_times["移動時間"]},
-    {"項目": "左折による減速時間", "時間（秒）": phase_times["左折による減速時間"]},
-    {"項目": "右折による待ち・減速時間", "時間（秒）": phase_times["右折による待ち・減速時間"]},
-    {"項目": "合計", "時間（秒）": phase_times["合計"]},
+    {"項目": "反応時間", "時間（秒）": round(phase["reaction_time"], 2)},
+    {"項目": "発進待ち時間", "時間（秒）": round(phase["queue_time"], 2)},
+    {"項目": "移動時間", "時間（秒）": round(phase["move_time"], 2)},
+    {"項目": "左折による減速時間", "時間（秒）": round(phase["left_turn_time"], 2)},
+    {"項目": "右折による待ち・減速時間", "時間（秒）": round(phase["right_turn_time"], 2)},
+    {"項目": "合計", "時間（秒）": round(phase["total"], 2)},
 ])
 
 st.dataframe(phase_df, use_container_width=True)
 
 # =========================
-# 11. 曜日・時間帯別の渋滞リスク比較
+# 10. 渋滞グラフ：前方車両数 N と通過時間 T
 # =========================
 
-st.subheader("曜日・時間帯別の渋滞リスク比較")
+st.subheader("渋滞グラフ：前方車両数 N と通過時間 T")
+
+st.write("現在の車種構成比を保ったまま、前方車両数 N を変化させた場合の通過時間 T を表示します。")
+
+max_N = st.slider("グラフに表示する最大車両数 N", 20, 200, 120)
+
+N_values = np.arange(1, max_N + 1)
+T_values = []
+jam_flags = []
+
+total_now = max(N, 1)
+
+bike_ratio = Nb / total_now
+car_ratio = Nc / total_now
+large_ratio = Nl / total_now
+
+for n_case in N_values:
+    nb_case = round(n_case * bike_ratio)
+    nc_case = round(n_case * car_ratio)
+    nl_case = n_case - nb_case - nc_case
+
+    case_result = calculate_result(
+        nb_case,
+        nc_case,
+        nl_case,
+        last_vehicle,
+        traffic_volume,
+        opposite_distance,
+        trials=300
+    )
+
+    T_values.append(case_result["T_min"])
+    jam_flags.append(case_result["T_min"] > case_result["C_min"])
+
+fig, ax = plt.subplots(figsize=(10, 5))
+
+ax.plot(N_values, T_values, linewidth=2, label="Passing time T")
+ax.axhline(result["C_min"], linestyle="--", linewidth=2, label="Cycle length C")
+
+ax.set_xlabel("Number of vehicles N")
+ax.set_ylabel("Time min")
+ax.set_title("Relationship between N and passing time")
+ax.grid(True)
+ax.legend()
+
+st.pyplot(fig)
+plt.close(fig)
+
+# =========================
+# 11. パラメータ変更による比較
+# =========================
+
+st.subheader("パラメータ変更による比較")
+
+st.write("横軸にするパラメータを選び、その値を変えたときの渋滞率を確認します。")
+
+parameter = st.selectbox(
+    "変化させるパラメータ",
+    ["前方車両数 N", "大型車台数", "対向車距離", "交通量"]
+)
+
+x_values = []
+jam_rates = []
+T_compare = []
+C_compare = []
+
+if parameter == "前方車両数 N":
+    x_values = list(range(5, 121, 5))
+
+    for n_case in x_values:
+        nb_case = round(n_case * bike_ratio)
+        nc_case = round(n_case * car_ratio)
+        nl_case = n_case - nb_case - nc_case
+
+        case = calculate_result(
+            nb_case,
+            nc_case,
+            nl_case,
+            last_vehicle,
+            traffic_volume,
+            opposite_distance,
+            trials=500
+        )
+
+        jam_rates.append(case["jam_rate"] * 100)
+        T_compare.append(case["T_min"])
+        C_compare.append(case["C_min"])
+
+elif parameter == "大型車台数":
+    x_values = list(range(0, 41, 2))
+
+    base_nb = Nb
+    base_total = max(N, 1)
+
+    for nl_case in x_values:
+        nc_case = max(base_total - base_nb - nl_case, 0)
+        nb_case = base_nb
+
+        case = calculate_result(
+            nb_case,
+            nc_case,
+            nl_case,
+            last_vehicle,
+            traffic_volume,
+            opposite_distance,
+            trials=500
+        )
+
+        jam_rates.append(case["jam_rate"] * 100)
+        T_compare.append(case["T_min"])
+        C_compare.append(case["C_min"])
+
+elif parameter == "対向車距離":
+    x_values = list(range(0, 101, 5))
+
+    for dist_case in x_values:
+        case = calculate_result(
+            Nb,
+            Nc,
+            Nl,
+            last_vehicle,
+            traffic_volume,
+            dist_case,
+            trials=500
+        )
+
+        jam_rates.append(case["jam_rate"] * 100)
+        T_compare.append(case["T_min"])
+        C_compare.append(case["C_min"])
+
+elif parameter == "交通量":
+    x_values = list(range(1, 31, 1))
+
+    for q_case in x_values:
+        case = calculate_result(
+            Nb,
+            Nc,
+            Nl,
+            last_vehicle,
+            q_case,
+            opposite_distance,
+            trials=500
+        )
+
+        jam_rates.append(case["jam_rate"] * 100)
+        T_compare.append(case["T_min"])
+        C_compare.append(case["C_min"])
+
+fig2, ax2 = plt.subplots(figsize=(10, 5))
+
+ax2.plot(x_values, jam_rates, linewidth=2, marker="o")
+ax2.set_xlabel(parameter)
+ax2.set_ylabel("Jam rate percent")
+ax2.set_title("Parameter sensitivity")
+ax2.grid(True)
+
+st.pyplot(fig2)
+plt.close(fig2)
+
+compare_df = pd.DataFrame({
+    parameter: x_values,
+    "渋滞率（%）": [round(v, 1) for v in jam_rates],
+    "通過時間 T（分）": [round(v, 2) for v in T_compare],
+    "サイクル長 C（分）": [round(v, 2) for v in C_compare],
+})
+
+st.dataframe(compare_df, use_container_width=True)
+
+# =========================
+# 12. 曜日・時間帯別の比較
+# =========================
+
+st.subheader("曜日・時間帯別の比較")
 
 scenario_rows = []
 
-for d_type, times in traffic_table.items():
-    for t_zone, q in times.items():
-        dr, C_s, C_m, G_s, G_m = calc_signal_cycle(q)
-
-        T_min_base = phase_times["合計"] / 60
-        risk = T_min_base / C_m
-
-        if risk >= 1:
-            level = "高"
-        elif risk >= 0.8:
-            level = "中"
-        else:
-            level = "低"
+for d_type, time_dict in traffic_table.items():
+    for t_zone, q_case in time_dict.items():
+        case = calculate_result(
+            Nb,
+            Nc,
+            Nl,
+            last_vehicle,
+            q_case,
+            opposite_distance,
+            trials=500
+        )
 
         scenario_rows.append({
             "曜日": d_type,
             "時間帯": t_zone,
-            "交通量（台/分）": q,
-            "需要率 λ": round(dr, 2),
-            "サイクル長 C（分）": round(C_m, 2),
-            "通過時間 T（分）": round(T_min_base, 2),
-            "T/C": round(risk, 2),
-            "渋滞リスク": level
+            "交通量（台/分）": q_case,
+            "需要率 λ": round(case["demand_rate"], 2),
+            "通過時間 T（分）": round(case["T_min"], 2),
+            "サイクル長 C（分）": round(case["C_min"], 2),
+            "渋滞率（%）": round(case["jam_rate"] * 100, 1)
         })
 
 scenario_df = pd.DataFrame(scenario_rows)
-scenario_df = scenario_df.sort_values("T/C", ascending=False)
-
 st.dataframe(scenario_df, use_container_width=True)
-
-# =========================
-# 12. 右折待ちの影響
-# =========================
-
-st.subheader("対向車距離による右折待ちリスク")
-
-distance_rows = []
-
-for dist in [0, 10, 20, 30, 40, 50, 60, 80, 100]:
-    wait, can_turn = calc_right_turn_wait(dist, opposite_speed)
-
-    phase = calculate_phase_times(
-        Nb,
-        Nc,
-        Nl,
-        last_vehicle,
-        N_left,
-        N_right,
-        wait
-    )
-
-    T_min_case = phase["合計"] / 60
-    risk = T_min_case / C_min
-
-    if risk >= 1:
-        level = "高"
-    elif risk >= 0.8:
-        level = "中"
-    else:
-        level = "低"
-
-    distance_rows.append({
-        "対向車距離（m）": dist,
-        "右折可能か": "可能" if can_turn else "待機",
-        "右折待ち時間（秒）": round(wait, 1),
-        "通過時間 T（分）": round(T_min_case, 2),
-        "T/C": round(risk, 2),
-        "渋滞リスク": level
-    })
-
-distance_df = pd.DataFrame(distance_rows)
-
-st.dataframe(distance_df, use_container_width=True)
-
-# =========================
-# 13. まとめ
-# =========================
-
-st.subheader("まとめ")
-
-summary_text = []
-
-summary_text.append(
-    "本モデルでは、最後尾車両の通過時間 T が信号サイクル長 C を上回る場合を、1回の信号で処理しきれない状態、つまり渋滞と定義した。"
-)
-
-summary_text.append(
-    "渋滞につながりやすい条件は、交通量が多い時間帯、前方車両数が多い場合、大型車の割合が高い場合、右折待ちが発生する場合である。"
-)
-
-summary_text.append(
-    "特に片側1車線では、右折車が停止すると後続車が追い越せないため、右折待ちの発生が通過時間を大きく伸ばし、渋滞リスクを高める。"
-)
-
-for text in summary_text:
-    st.write(text)
